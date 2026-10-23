@@ -1,6 +1,7 @@
 /**
- * Source of uniform random integers. The server uses a crypto-backed source;
- * tests, odds checks and the balance simulator use the seeded one below.
+ * Source of uniform random integers. The server uses a crypto-backed source,
+ * the browser game uses Web Crypto, and tests, odds checks and the balance
+ * report use the seeded one below.
  */
 export interface RandomSource {
   /** Uniform integer in [0, maxExclusive). */
@@ -33,3 +34,14 @@ export function seededRandom(seed: number): RandomSource {
     },
   };
 }
+
+/** Uniform integers from the Web Crypto API (browsers, and Node's globalThis.crypto), without modulo bias. */
+export const webCryptoRandom: RandomSource = {
+  int(maxExclusive: number): number {
+    const limit = Math.floor(0x1_0000_0000 / maxExclusive) * maxExclusive;
+    const buf = new Uint32Array(1);
+    do globalThis.crypto.getRandomValues(buf);
+    while (buf[0]! >= limit);
+    return buf[0]! % maxExclusive;
+  },
+};

@@ -1,5 +1,5 @@
-// Builds the website on its own into dist/site: a static copy with relative
-// asset paths and no game-server calls, ready for any static host.
+// Builds the website and the in-browser game into dist/site: a static copy
+// with relative asset paths and no game-server calls, ready for any static host.
 import { writeFileSync } from 'node:fs';
 import { build } from 'vite';
 

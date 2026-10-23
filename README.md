@@ -36,13 +36,19 @@ Other scripts: `npm test`, `npm run typecheck`, `npm run odds` (regenerate exact
 
 ## Website
 
-`/` is the game's website: what RNG Badges is, a playable demo, a number checker, the badge families, the closer-pays-more reference tiers, the 1000000 skip odds, the rarity ladder, both leaderboards and an FAQ. It links to the game at `/play/`, and the game's logo links back.
+`/` is the game's website: what RNG Badges is, a playable demo, a number checker, the badge families, the closer-pays-more reference tiers, the 1000000 skip odds, the rarity ladder, both leaderboards and an FAQ. Its Play buttons go to the full game at `play/`, and the game's logo links back.
 
-The demo and the checker run the real badge engine in the browser (`src/client/site/engine.ts`), using the game's own roll and reveal components. Demo rolls are never saved and never reach the leaderboards. When the site is served by the game server, the leaderboard section shows the live top five on each board.
+The demo and the checker run the real badge engine in the browser (`src/client/site/engine.ts`), using the game's own roll and reveal components. Demo rolls are never saved. After five demo rolls, a **Try the full game to save!** button appears under the Roll button and takes you to the game. When the site is served by the game server, the leaderboard section shows the live top five on each board.
 
-**Repo website:** https://chrishonk9014-commits.github.io/RNGBadges/ is served by GitHub Pages from the `gh-pages` branch. The `Website` workflow (`.github/workflows/website.yml`) runs the tests, rebuilds the site and republishes `gh-pages` on every push to `main`; it can also be run by hand from the Actions tab.
+**Repo website:** https://chrishonk9014-commits.github.io/RNGBadges/ is the website, and https://chrishonk9014-commits.github.io/RNGBadges/play/ is the full game. Both are served by GitHub Pages from the `gh-pages` branch. The `Website` workflow (`.github/workflows/website.yml`) runs the tests, rebuilds the site and republishes `gh-pages` on every push to `main`; it can also be run by hand from the Actions tab.
 
-`npm run build:site` builds the website on its own into `dist/site`: a static copy with relative paths and no server calls, for any static host. In that copy, Play buttons go to the demo, the leaderboard section describes the boards without live data, and links point to this repository so visitors can run the full game. Badge counts, odds, XP and the rarity ladder's odds on the site come from the catalog at build time, so they stay current; the hand-picked examples live in `src/client/site/content.ts`, and a test fails if an example badge is renamed or removed.
+`npm run build:site` builds the website and the game into `dist/site`: a static copy with relative paths and no server calls, for any static host. There's no server behind it, so the game runs entirely in the browser (`src/client/local/`):
+
+- `localGame.ts` follows the server's rules and returns the same responses, and `localApi.ts` answers the game's API requests with it. The UI is the same code in both versions.
+- Rolls use the browser's cryptographic random number generator (`crypto.getRandomValues`).
+- Progress (collection, roll count, ten best rolls) is saved in `localStorage`. Profile → **Download save** / **Load a save file** backs it up or moves it to another browser. Two open tabs share one save without undoing each other's finds.
+- With no shared server there are no global leaderboards: **Top Rolls** ranks the player's own ten best rolls instead, and the website's leaderboard section explains the boards without live data.
+- Because the save is in the player's browser, it can be edited. That's why this version has no global boards. Host the server (`npm start`) for real leaderboards. Badge counts, odds, XP and the rarity ladder's odds on the site come from the catalog at build time, so they stay current; the hand-picked examples live in `src/client/site/content.ts`, and a test fails if an example badge is renamed or removed.
 
 ## How it plays
 
@@ -134,7 +140,8 @@ src/shared/            engine shared by server, client and scripts
 src/server/            Fastify API + SQLite (node:sqlite)
   game.ts              accounts, rolling, awards, leaderboards, rebalancing
   app.ts               routes, auth, rate limits, static client
-src/client/            React UI (Vite): the game (play/, App.tsx) and the website (site/)
+src/client/            React UI (Vite): the game (play/, App.tsx), the website (site/)
+  local/               the game's rules in the browser, for static hosting
 scripts/               odds generator, balance report, build helpers
 tests/                 vitest: roll/skip, badges/odds, progression/reveal, API
 ```

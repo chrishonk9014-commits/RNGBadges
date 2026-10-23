@@ -53,14 +53,17 @@ export const FAMILIES: Array<{ category: CategoryId; title: string; blurb: strin
   { category: 'meta', title: 'Secrets', blurb: 'Badges about you as much as the number. Find them to learn their names.', examples: [] },
 ];
 
-export const FAQ: Array<{ q: string; a: string }> = [
+/** `browser` replaces the answer on copies of the site where the game runs in the browser (no game server). */
+export const FAQ: Array<{ q: string; a: string; browser?: string }> = [
   {
     q: 'Are the rolls really random?',
     a: 'Yes. In the full game the server draws every roll with a cryptographic random number generator, so nobody can pick their numbers. Each of the 1,000,001 outcomes is equally likely.',
+    browser: 'Yes. Every roll is drawn with your browser’s cryptographic random number generator, and each of the 1,000,001 outcomes is equally likely.',
   },
   {
     q: 'Does my progress save?',
     a: 'Your first visit creates a player and a private save code. Progress lives on the server, and the save code lets you continue on another device. Rolls in the demo on this page are not saved.',
+    browser: 'Yes. The full game saves your collection and best rolls in this browser. Download a save file from your profile to back it up or carry on somewhere else. Rolls in the demo on this page are not saved.',
   },
   {
     q: 'How is a roll’s rarity decided?',
@@ -69,6 +72,7 @@ export const FAQ: Array<{ q: string; a: string }> = [
   {
     q: 'Does a badge I already have still count?',
     a: 'Yes. Every badge counts toward every roll it appears in. Finding one for the first time also adds it to your collection, which has its own leaderboard.',
+    browser: 'Yes. Every badge counts toward every roll it appears in. Finding one for the first time also adds it to your collection.',
   },
   {
     q: 'What is the rarest badge?',
@@ -83,3 +87,9 @@ export const FAQ: Array<{ q: string; a: string }> = [
     a: 'Yes. The game and this site work at phone width, and reduced-motion settings are respected.',
   },
 ];
+
+/** The game lives at play/ next to the site, on the game server and on a static host alike. */
+export const GAME_URL = 'play/';
+
+/** Demo rolls before the demo starts pointing at the full game. */
+export const DEMO_NUDGE_AFTER = 5;

@@ -11,10 +11,17 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Built without a game server (the static website, e.g. on GitHub Pages): the
+ * game then runs in the browser and saves there, and requests go to localApi.
+ */
+export const LOCAL_GAME = import.meta.env.VITE_STANDALONE === '1';
+
 /** True when the request never reached the server (offline, server down). */
 export const isNetworkError = (e: unknown): boolean => e instanceof ApiError && e.status === 0;
 
 export async function api<T>(path: string, init: { method?: string; body?: unknown; token?: string | null } = {}): Promise<T> {
+  if (LOCAL_GAME) return (await import('./local/localApi')).localApi<T>(path, init);
   const headers: Record<string, string> = {};
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
   if (init.token) headers.Authorization = `Bearer ${init.token}`;

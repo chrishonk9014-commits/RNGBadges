@@ -1,28 +1,18 @@
 /**
  * The real badge engine, running in the browser for the website's demo and
- * number checker. Demo rolls are drawn here, so they are never saved and
- * never reach the leaderboards; the full game rolls on the server.
+ * number checker. Demo rolls are drawn here and never saved.
  */
-import type { AwardedBadge, BadgeView, RollResponse, RollView } from '../../shared/api';
+import type { AwardedBadge, RollResponse } from '../../shared/api';
 import { compareBadgeQuality, getRegistry, type CatalogBadge } from '../../shared/badges/registry';
 import type { LocalTime, RollContext } from '../../shared/badges/types';
-import type { RandomSource } from '../../shared/rng';
-import { formatRoll, normalRoll, parseRoll, rollCells, sevenDigitRoll, type Roll } from '../../shared/roll';
+import { normalRoll, parseRoll, sevenDigitRoll, type Roll } from '../../shared/roll';
 import { rarityForXp } from '../../shared/progression';
 import { rollXp } from '../../shared/scoring';
+import { badgeView, rollView } from '../../shared/views';
 
 export const registry = getRegistry();
 
-/** Uniform integers from the browser's cryptographic RNG, without modulo bias. */
-export const browserRandom: RandomSource = {
-  int(maxExclusive: number): number {
-    const limit = Math.floor(0x1_0000_0000 / maxExclusive) * maxExclusive;
-    const buf = new Uint32Array(1);
-    do crypto.getRandomValues(buf);
-    while (buf[0]! >= limit);
-    return buf[0]! % maxExclusive;
-  },
-};
+export { webCryptoRandom as browserRandom } from '../../shared/rng';
 
 export function localNow(): LocalTime {
   const d = new Date();
@@ -42,14 +32,6 @@ export function badgesFor(roll: Roll, ctx?: RollContext): CatalogBadge[] {
     .detect(roll, ctx)
     .map((id) => registry.get(id)!)
     .sort(compareBadgeQuality);
-}
-
-export function view(b: CatalogBadge): BadgeView {
-  return { ...b, revealed: true };
-}
-
-export function rollView(roll: Roll): RollView {
-  return { text: formatRoll(roll), digits: roll.digits, skips: roll.skips, seven: roll.seven, cells: rollCells(roll) };
 }
 
 /**
@@ -72,7 +54,7 @@ export function buildRollResponse(
   owned: ReadonlySet<string>,
   player: RollResponse['player'],
 ): RollResponse {
-  const awarded: AwardedBadge[] = badges.map((b) => ({ ...view(b), isNew: !owned.has(b.id) }));
+  const awarded: AwardedBadge[] = badges.map((b) => ({ ...badgeView(b, true), isNew: !owned.has(b.id) }));
   const xp = rollXp(badges);
   return {
     id,

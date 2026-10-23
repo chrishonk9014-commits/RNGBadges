@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import type { RandomSource } from './rng';
 
 export const USERNAME_MIN = 3;
 export const USERNAME_MAX = 20;
@@ -39,8 +39,8 @@ const NOUNS = [
   'Nova', 'Quasar', 'Lynx', 'Gecko', 'Owl', 'Mantis', 'Whale', 'Yeti', 'Golem', 'Sprite',
 ];
 
-export function generateUsername(): string {
-  const adjective = ADJECTIVES[randomInt(ADJECTIVES.length)]!;
-  const noun = NOUNS[randomInt(NOUNS.length)]!;
-  return `${adjective}${noun}${randomInt(10, 10_000)}`;
+export function generateUsername(rng: RandomSource): string {
+  const adjective = ADJECTIVES[rng.int(ADJECTIVES.length)]!;
+  const noun = NOUNS[rng.int(NOUNS.length)]!;
+  return `${adjective}${noun}${10 + rng.int(9_990)}`;
 }

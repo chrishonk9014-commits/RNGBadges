@@ -2,7 +2,6 @@ import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type {
   AwardedBadge,
   BadgeStatsResponse,
-  BadgeView,
   BestLeaderboardEntry,
   BestRoll,
   CatalogResponse,
@@ -13,14 +12,15 @@ import type {
   CollectionLeaderboardEntry,
   RollResponse,
 } from '../shared/api';
-import type { LocalTime } from '../shared/badges/types';
-import { compareBadgeQuality, getRegistry, type BadgeRegistry, type CatalogBadge } from '../shared/badges/registry';
+import { compareBadgeQuality, getRegistry, type BadgeRegistry } from '../shared/badges/registry';
 import { rarityForXp } from '../shared/progression';
 import type { RandomSource } from '../shared/rng';
-import { formatRoll, parseRoll, rollCells, rollNumber, type Roll } from '../shared/roll';
+import { generateUsername, usernameProblem } from '../shared/names';
+import { formatRoll, parseRoll, rollNumber } from '../shared/roll';
 import { rollXp, standoutBadges } from '../shared/scoring';
+import { clampTzOffset, localTime } from '../shared/time';
+import { badgeView, rollView } from '../shared/views';
 import { getMeta, setMeta, transaction, type Database } from './db';
-import { generateUsername, usernameProblem } from './names';
 
 export class GameError extends Error {
   constructor(
@@ -61,19 +61,6 @@ const PLAYER_COLUMNS =
 
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
-/** Wall-clock time in the player's zone. `tzOffsetMinutes` follows Date#getTimezoneOffset (UTC − local). */
-export function localTime(nowMs: number, tzOffsetMinutes: number): LocalTime {
-  const d = new Date(nowMs - tzOffsetMinutes * 60_000);
-  return {
-    year: d.getUTCFullYear(),
-    month: d.getUTCMonth() + 1,
-    day: d.getUTCDate(),
-    hour: d.getUTCHours(),
-    minute: d.getUTCMinutes(),
-    second: d.getUTCSeconds(),
-  };
-}
-
 /**
  * All game rules that touch persistence. Rolls happen here, on the server,
  * so the leaderboards only ever contain numbers this code actually rolled.
@@ -108,7 +95,7 @@ export class GameService {
       if (problem) throw new GameError(400, 'bad_username', problem);
       if (this.usernameTaken(username)) throw new GameError(409, 'username_taken', 'That username is taken.');
     } else {
-      do username = generateUsername();
+      do username = generateUsername(this.rng);
       while (this.usernameTaken(username));
     }
     const token = randomBytes(32).toString('base64url');
@@ -141,7 +128,7 @@ export class GameService {
 
   roll(playerId: number, tzOffsetMinutes = 0): RollResponse {
     const before = this.requirePlayer(playerId);
-    const offset = Number.isFinite(tzOffsetMinutes) ? Math.max(-840, Math.min(840, Math.round(tzOffsetMinutes))) : 0;
+    const offset = clampTzOffset(tzOffsetMinutes);
     const t = this.now();
     const roll = rollNumber(this.rng);
     const text = formatRoll(roll);
@@ -188,11 +175,11 @@ export class GameService {
     });
 
     const after = this.requirePlayer(playerId);
-    const badges: AwardedBadge[] = earned.map((b) => ({ ...this.view(b, true), isNew: fresh.has(b.id) }));
+    const badges: AwardedBadge[] = earned.map((b) => ({ ...badgeView(b, true), isNew: fresh.has(b.id) }));
     return {
       id: randomUUID(),
       rollNumber: number,
-      roll: this.rollView(roll),
+      roll: rollView(roll),
       badges,
       xp,
       rarity: rarityForXp(xp).id,
@@ -215,7 +202,7 @@ export class GameService {
       revealed: live
         .map((r) => this.registry.get(r.badge_id)!)
         .filter((b) => b.hidden)
-        .map((b) => this.view(b, true)),
+        .map((b) => badgeView(b, true)),
       best: this.bestRoll(player),
     };
   }
@@ -223,7 +210,7 @@ export class GameService {
   catalog(): CatalogResponse {
     this.catalogCache ??= {
       version: this.catalogVersion,
-      badges: this.registry.badges.map((b) => this.view(b, !b.hidden)),
+      badges: this.registry.badges.map((b) => badgeView(b, !b.hidden)),
     };
     return this.catalogCache;
   }
@@ -375,26 +362,6 @@ export class GameService {
       rarity: rarityForXp(row.best_score).id,
       at: row.best_at,
       badges: standoutBadges(badges).map((b) => ({ id: b.id, name: b.name, tier: b.tier, xp: b.xp })),
-    };
-  }
-
-  private rollView(roll: Roll): RollResponse['roll'] {
-    return { text: formatRoll(roll), digits: roll.digits, skips: roll.skips, seven: roll.seven, cells: rollCells(roll) };
-  }
-
-  private view(b: CatalogBadge, revealed: boolean): BadgeView {
-    if (revealed) return { ...b, revealed: true };
-    return {
-      id: b.id,
-      name: '???',
-      description: 'A secret badge. Keep rolling.',
-      category: b.category,
-      family: b.family,
-      hidden: true,
-      revealed: false,
-      probability: b.probability,
-      xp: b.xp,
-      tier: b.tier,
     };
   }
 }

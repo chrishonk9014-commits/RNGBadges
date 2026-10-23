@@ -7,6 +7,7 @@ import { ProfileSheet } from './components/ProfileSheet';
 import { RollStage } from './components/RollStage';
 import { CollectionSheet } from './components/CollectionSheet';
 import { rarityForXp, rarityIndexForXp } from '../shared/progression';
+import { LOCAL_GAME } from './api';
 import { formatNumber, rarity, rarityPaint, useSystemReducedMotion } from './format';
 import { loadMotion, saveMotion, type MotionPreference } from './storage';
 import { useGame } from './useGame';
@@ -108,7 +109,7 @@ export function App() {
     return (
       <div className="splash">
         <h1 className="logo">RNG BADGES</h1>
-        <p className="muted">Connecting…</p>
+        <p className="muted">{LOCAL_GAME ? 'Loading…' : 'Connecting…'}</p>
       </div>
     );
   }
@@ -133,7 +134,7 @@ export function App() {
     >
       <header className="topbar">
         <h1 className="logo">
-          <a href="/" className="logo-link" title="RNG Badges home">
+          <a href="../" className="logo-link" title="RNG Badges home">
             RNG BADGES
           </a>
         </h1>
@@ -144,7 +145,7 @@ export function App() {
           </button>
           <button type="button" className="nav-button" onClick={() => setView('leaderboards')}>
             <IconTrophy />
-            <span>Leaderboards</span>
+            <span>{LOCAL_GAME ? 'Top Rolls' : 'Leaderboards'}</span>
           </button>
           <button type="button" className="nav-button nav-player" onClick={() => setView('profile')} aria-label={`Profile: ${player.username}`}>
             <IconUser />
@@ -196,12 +197,22 @@ export function App() {
       </main>
 
       <footer className="footer">
-        <p>
-          Rolls happen on the server: one draw from 000000–999999 or the seven-digit 1000000, all 1,000,001 equally likely.{' '}
-          <button type="button" className="link" onClick={() => setView('leaderboards')}>
-            See who’s on top →
-          </button>
-        </p>
+        {LOCAL_GAME ? (
+          <p>
+            Rolls happen in your browser, with its cryptographic random number generator: one draw from 000000–999999 or the seven-digit 1000000, all 1,000,001
+            equally likely. Your progress is saved on this device.{' '}
+            <button type="button" className="link" onClick={() => setView('leaderboards')}>
+              Your top rolls →
+            </button>
+          </p>
+        ) : (
+          <p>
+            Rolls happen on the server: one draw from 000000–999999 or the seven-digit 1000000, all 1,000,001 equally likely.{' '}
+            <button type="button" className="link" onClick={() => setView('leaderboards')}>
+              See who’s on top →
+            </button>
+          </p>
+        )}
       </footer>
 
       <BestRollToast toast={toast} onDismiss={dismissToast} />

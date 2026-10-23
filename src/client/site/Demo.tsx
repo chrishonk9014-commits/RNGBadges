@@ -6,6 +6,7 @@ import { BadgesCollected } from '../components/BadgesCollected';
 import { RollRarityPanel, type RollPanelStatus } from '../components/Panels';
 import { RollStage } from '../components/RollStage';
 import { formatNumber, formatOdds, tier } from '../format';
+import { DEMO_NUDGE_AFTER, GAME_URL } from './content';
 import { badgesFor, browserRandom, buildRollResponse, localNow, readNumber } from './engine';
 
 /** A playable copy of the roll screen, using the same components and badge engine as the game. */
@@ -84,6 +85,12 @@ export function DemoRoller({ reducedMotion }: { reducedMotion: boolean }) {
           )}{' '}
           · not saved
         </p>
+        {s.rolls >= DEMO_NUDGE_AFTER && (
+          <a className="demo-nudge" href={GAME_URL}>
+            <strong>Try the full game to save!</strong>
+            <span>Demo rolls vanish when you leave. The full game keeps every badge you find and your best rolls.</span>
+          </a>
+        )}
       </div>
       <BadgesCollected key={shown?.id ?? 'none'} roll={shown} mode={mode} reducedMotion={reducedMotion} onComplete={setRevealedId} onProgress={onProgress} />
     </div>

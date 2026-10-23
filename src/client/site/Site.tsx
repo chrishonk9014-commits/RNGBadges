@@ -7,11 +7,11 @@ import { ROLL_OUTCOMES, SEVEN_DIGIT_NUMBER, formatRoll, sevenDigitRoll, skipCoun
 import { api } from '../api';
 import { RollText, cellsFromText } from '../components/RollNumber';
 import { CATEGORY_NAMES, formatNumber, formatOdds, rarity, rarityPaint, tier, useSystemReducedMotion } from '../format';
-import { FAMILIES, FAQ, SHOWCASE } from './content';
+import { FAMILIES, FAQ, GAME_URL, SHOWCASE } from './content';
 import { DemoRoller, NumberChecker } from './Demo';
 import { badgesFor, readNumber, registry } from './engine';
 
-/** Built without the game server (a static copy of the site): no Play links, no live data. */
+/** Built without the game server (a static copy of the site): the game runs in the browser and there are no live boards. */
 const STANDALONE = import.meta.env.VITE_STANDALONE === '1';
 /** Where the source lives; the static copy links here so visitors can run the full game. */
 const REPO_URL = import.meta.env.VITE_REPO_URL;
@@ -54,12 +54,8 @@ export function Site() {
 }
 
 function PlayLink({ className, children }: { className: string; children: string }) {
-  return STANDALONE ? (
-    <a className={className} href="#try">
-      Try a roll
-    </a>
-  ) : (
-    <a className={className} href="/play/">
+  return (
+    <a className={className} href={GAME_URL}>
       {children}
     </a>
   );
@@ -138,8 +134,8 @@ function Hero({ reducedMotion }: { reducedMotion: boolean }) {
           </p>
           <div className="hero-actions">
             <PlayLink className="button-big">Play now</PlayLink>
-            <a className="button-quiet" href={STANDALONE ? '#how' : '#try'}>
-              {STANDALONE ? 'How it works' : 'Try a demo roll'}
+            <a className="button-quiet" href="#try">
+              Try a demo roll
             </a>
           </div>
         </div>
@@ -216,8 +212,8 @@ function TrySection({ reducedMotion }: { reducedMotion: boolean }) {
           <p className="eyebrow">Demo</p>
           <h2 id="try-title">Roll one right here.</h2>
           <p>
-            This is the real roll screen and the real badge engine, running in your browser. Demo rolls aren't saved
-            {STANDALONE ? ' and never reach the leaderboards.' : '. Play the full game to keep every badge you find and put your best roll on the leaderboards.'}
+            This is the real roll screen and the real badge engine, running in your browser. Demo rolls aren't saved. <a href={GAME_URL}>Play the full game</a> to
+            keep every badge you find{STANDALONE ? ' and your best rolls.' : ' and put your best roll on the leaderboards.'}
           </p>
         </header>
         <div className="try-grid">
@@ -471,11 +467,12 @@ function Boards() {
         </div>
         {STANDALONE && (
           <p className="footnote">
-            The live boards run on the game server, which keeps every player's progress.
+            Global boards need the game server, which keeps every player's progress in one place. The game on this site runs in your browser instead: it saves on
+            your device and ranks your own top rolls.
             {REPO_URL && (
               <>
                 {' '}
-                <a href={REPO_URL}>Get the game on GitHub</a> to run your own.
+                <a href={REPO_URL}>Get the code on GitHub</a> to host a server with global leaderboards.
               </>
             )}
           </p>
@@ -580,7 +577,7 @@ function Faq() {
           {FAQ.map((item) => (
             <details key={item.q}>
               <summary>{item.q}</summary>
-              <p>{item.a}</p>
+              <p>{STANDALONE ? (item.browser ?? item.a) : item.a}</p>
             </details>
           ))}
         </div>
@@ -597,11 +594,6 @@ function FinalCall() {
         <h2 id="final-title">Your first roll is one click away.</h2>
         <div className="hero-actions">
           <PlayLink className="button-big">Play RNG Badges</PlayLink>
-          {STANDALONE && REPO_URL && (
-            <a className="button-quiet" href={REPO_URL}>
-              Run the full game
-            </a>
-          )}
         </div>
       </div>
     </section>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type { BestLeaderboardEntry, CollectionLeaderboardEntry, LeaderboardResponse } from '../../shared/api';
-import { api } from '../api';
+import { LOCAL_GAME, api } from '../api';
+import type { TopRoll, TopRollsResponse } from '../local/localGame';
 import { formatNumber, rarity, rarityPaint, tier, timeAgo } from '../format';
 import { RollText } from './RollNumber';
 import { Sheet } from './Sheet';
@@ -15,7 +16,11 @@ interface Props {
   onClose: () => void;
 }
 
-export function LeaderboardSheet({ token, totalBadges, initialTab = 'best', onClose }: Props) {
+export function LeaderboardSheet(props: Props) {
+  return LOCAL_GAME ? <TopRollsSheet onClose={props.onClose} /> : <GlobalLeaderboards {...props} />;
+}
+
+function GlobalLeaderboards({ token, totalBadges, initialTab = 'best', onClose }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [best, setBest] = useState<LeaderboardResponse<BestLeaderboardEntry> | null>(null);
   const [collection, setCollection] = useState<LeaderboardResponse<CollectionLeaderboardEntry> | null>(null);
@@ -172,5 +177,68 @@ function BestRow({ row, you }: { row: BestLeaderboardEntry; you: boolean }) {
       </td>
       <td className="num">{formatNumber(row.xp)}</td>
     </tr>
+  );
+}
+
+/** The browser version has no shared server, so it ranks the player's own rolls instead. */
+function TopRollsSheet({ onClose }: { onClose: () => void }) {
+  const [rolls, setRolls] = useState<TopRoll[] | null>(null);
+  useEffect(() => {
+    api<TopRollsResponse>('/api/local/top').then(
+      (r) => setRolls(r.rolls),
+      () => setRolls([]),
+    );
+  }, []);
+  return (
+    <Sheet title="Your Top Rolls" onClose={onClose} wide>
+      <p className="muted leaderboard-note">
+        This copy of RNG Badges runs in your browser and saves on this device, so there are no global leaderboards here. These are your ten best rolls, ranked by XP.
+      </p>
+      {!rolls && <p className="muted">Loading…</p>}
+      {rolls && rolls.length === 0 && <p className="muted">Roll a few numbers and your best ones will show up here.</p>}
+      {rolls && rolls.length > 0 && (
+        <table className="board board-top">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Number</th>
+              <th scope="col">Rarity and standout badges</th>
+              <th scope="col" className="num">
+                XP
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rolls.map((row, i) => {
+              const r = rarity(row.rarity);
+              return (
+                <tr key={`${row.rollNumber}-${row.at}`}>
+                  <td className="rank">{i + 1}</td>
+                  <td className="board-number">
+                    <RollText text={row.roll} />
+                    <span className="board-when">
+                      Roll {formatNumber(row.rollNumber)} · {timeAgo(row.at)}
+                    </span>
+                  </td>
+                  <td>
+                    <ul className="chips">
+                      <li className="rarity-pill" style={{ '--rarity-paint': rarityPaint(r) } as CSSProperties}>
+                        {r.name}
+                      </li>
+                      {row.badges.map((b) => (
+                        <li key={b.id} className="chip" style={{ '--tier': tier(b.tier).color } as CSSProperties} title={`${tier(b.tier).name} · ${formatNumber(b.xp)} XP`}>
+                          {b.name}
+                        </li>
+                      ))}
+                    </ul>
+                  </td>
+                  <td className="num">{formatNumber(row.xp)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </Sheet>
   );
 }

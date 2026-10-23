@@ -9,7 +9,7 @@ import type {
   RegisterResponse,
   RollResponse,
 } from '../shared/api';
-import { ApiError, api, isNetworkError } from './api';
+import { ApiError, LOCAL_GAME, api, isNetworkError } from './api';
 import { loadToken, saveToken } from './storage';
 
 const HISTORY_LIMIT = 30;
@@ -35,7 +35,7 @@ export interface GameState {
 }
 
 type Action =
-  | { type: 'loaded'; token: string; catalog: CatalogResponse; profile: ProfileResponse }
+  | { type: 'loaded'; token: string; catalog: CatalogResponse; profile: ProfileResponse; notice: string | null }
   | { type: 'failed'; message: string }
   | { type: 'rollStart' }
   | { type: 'rollDone'; res: RollResponse; at: number }
@@ -65,6 +65,7 @@ function reducer(state: GameState, action: Action): GameState {
       return {
         ...initial,
         phase: 'ready',
+        notice: action.notice,
         token: action.token,
         catalog: action.catalog,
         player: action.profile.player,
@@ -136,7 +137,11 @@ async function loadEverything(preferredToken: string | null): Promise<Extract<Ac
     profile = await api<ProfileResponse>('/api/me', { token });
   }
   saveToken(token);
-  return { type: 'loaded', token, catalog, profile };
+  let notice: string | null = null;
+  if (LOCAL_GAME && !(await api<{ persistent: boolean }>('/api/local/status')).persistent) {
+    notice = 'This browser isn’t keeping your progress (private browsing or blocked site data). Download a save from your profile before you leave.';
+  }
+  return { type: 'loaded', token, catalog, profile, notice };
 }
 
 export function useGame() {
@@ -202,8 +207,16 @@ export function useGame() {
     dispatch({ type: 'player', player });
   }, []);
 
-  /** Switches this browser to another account using its save code. */
+  /**
+   * Switches this browser to another save: a save code for the server, or the
+   * text of a save file in the browser version.
+   */
   const restore = useCallback(async (code: string) => {
+    if (LOCAL_GAME) {
+      await api<ProfileResponse>('/api/local/save', { method: 'POST', body: { save: code } });
+      await boot(tokenRef.current);
+      return;
+    }
     const token = code.trim();
     await api<ProfileResponse>('/api/me', { token });
     saveToken(token);

@@ -1232,6 +1232,19 @@ p {
   cursor: default;
 }
 
+/* A file picker that looks like a button; the input inside stays keyboard-reachable. */
+.file-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.file-button:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ── Collection ────────────────────────────────────────────────────── */
 
 .collection-summary {
