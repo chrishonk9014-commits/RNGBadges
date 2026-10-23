@@ -2,7 +2,11 @@
   "name": "rng-badges",
   "version": "1.0.0",
   "private": true,
-  "description": "RNG Badges — roll numbers, discover hand-designed badges, climb rarities and leaderboards.",
+  "description": "RNG Badges \u2014 roll numbers, discover hand-designed badges, climb rarities and leaderboards.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chrishonk9014-commits/RNGBadges"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.13"

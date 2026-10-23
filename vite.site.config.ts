@@ -1,6 +1,9 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import pkg from './package.json' with { type: 'json' };
+
+const repoUrl = process.env.GITHUB_REPOSITORY ? `https://github.com/${process.env.GITHUB_REPOSITORY}` : pkg.repository.url;
 
 /**
  * Standalone build of the website alone, with relative asset paths and no
@@ -11,7 +14,10 @@ export default defineConfig({
   root: 'src/client',
   base: './',
   plugins: [react()],
-  define: { 'import.meta.env.VITE_STANDALONE': JSON.stringify('1') },
+  define: {
+    'import.meta.env.VITE_STANDALONE': JSON.stringify('1'),
+    'import.meta.env.VITE_REPO_URL': JSON.stringify(repoUrl),
+  },
   build: {
     outDir: '../../dist/site',
     emptyOutDir: true,

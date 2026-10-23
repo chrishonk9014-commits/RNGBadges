@@ -11,6 +11,8 @@ import { badgesFor, readNumber, registry } from './engine';
 
 /** Built without the game server (a static copy of the site): no Play links, no live data. */
 const STANDALONE = import.meta.env.VITE_STANDALONE === '1';
+/** Where the source lives; the static copy links here so visitors can run the full game. */
+const REPO_URL = import.meta.env.VITE_REPO_URL;
 const BADGE_COUNT = registry.badges.length;
 const RAREST = [...registry.badges].sort((a, b) => a.probability - b.probability)[0]!;
 
@@ -38,6 +40,11 @@ export function Site() {
           <span>
             {formatNumber(BADGE_COUNT)} badges · odds checked against all {formatNumber(ROLL_OUTCOMES)} possible rolls
           </span>
+          {REPO_URL && (
+            <a className="site-footer-link" href={REPO_URL}>
+              Source on GitHub
+            </a>
+          )}
         </div>
       </footer>
     </div>
@@ -439,6 +446,17 @@ function Boards() {
             {!STANDALONE && <LiveBest />}
           </article>
         </div>
+        {STANDALONE && (
+          <p className="footnote">
+            The live boards run on the game server, which keeps every player's progress.
+            {REPO_URL && (
+              <>
+                {' '}
+                <a href={REPO_URL}>Get the game on GitHub</a> to run your own.
+              </>
+            )}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -559,7 +577,14 @@ function FinalCall() {
       <div className="wrap final-inner">
         <Tiles text="000000" size="sm" />
         <h2 id="final-title">Your first roll is one click away.</h2>
-        <PlayLink className="button-big">Play RNG Badges</PlayLink>
+        <div className="hero-actions">
+          <PlayLink className="button-big">Play RNG Badges</PlayLink>
+          {STANDALONE && REPO_URL && (
+            <a className="button-quiet" href={REPO_URL}>
+              Run the full game
+            </a>
+          )}
+        </div>
       </div>
     </section>
   );

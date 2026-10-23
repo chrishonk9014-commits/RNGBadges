@@ -1184,6 +1184,14 @@ h3 {
   color: var(--faint);
 }
 
+.site-footer-link {
+  color: var(--accent-2) !important;
+}
+
+.footnote a {
+  color: var(--accent-2);
+}
+
 .site-footer-inner {
   display: flex;
   flex-wrap: wrap;
