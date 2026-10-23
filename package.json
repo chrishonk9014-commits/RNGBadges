@@ -1,0 +1,39 @@
+{
+  "name": "rng-badges",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RNG Badges — roll numbers, discover hand-designed badges, climb rarities and leaderboards.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "tsx watch --clear-screen=false src/server/main.ts",
+    "dev:client": "vite",
+    "build": "vite build && node scripts/build-server.mjs",
+    "start": "node dist/server/main.js",
+    "odds": "tsx scripts/compute-odds.ts",
+    "balance": "tsx scripts/balance.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run test"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.7",
+    "fastify": "^5.12.7",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
