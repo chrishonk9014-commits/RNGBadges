@@ -8,7 +8,8 @@ import { compareBadgeQuality, getRegistry, type CatalogBadge } from '../../share
 import type { LocalTime, RollContext } from '../../shared/badges/types';
 import type { RandomSource } from '../../shared/rng';
 import { formatRoll, normalRoll, parseRoll, rollCells, sevenDigitRoll, type Roll } from '../../shared/roll';
-import { rollScore } from '../../shared/scoring';
+import { rarityForXp } from '../../shared/progression';
+import { rollXp } from '../../shared/scoring';
 
 export const registry = getRegistry();
 
@@ -72,15 +73,15 @@ export function buildRollResponse(
   player: RollResponse['player'],
 ): RollResponse {
   const awarded: AwardedBadge[] = badges.map((b) => ({ ...view(b), isNew: !owned.has(b.id) }));
+  const xp = rollXp(badges);
   return {
     id,
     rollNumber,
     roll: rollView(roll),
     badges: awarded,
-    xpGained: awarded.reduce((sum, b) => sum + (b.isNew ? b.xp : 0), 0),
-    score: rollScore(badges),
-    bestImproved: false,
-    rankUp: null,
+    xp,
+    rarity: rarityForXp(xp).id,
+    bestImproved: xp > player.bestXp,
     player,
   };
 }

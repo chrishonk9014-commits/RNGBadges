@@ -321,27 +321,62 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
-.rarity-bar {
-  margin-top: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  overflow: hidden;
-}
-
-.rarity-bar span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--rarity-paint);
-  box-shadow: 0 0 12px var(--rarity);
-  transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
 .rarity-next {
   margin-top: 6px;
   font-size: 13px;
   color: var(--muted);
+}
+
+/* The 16-rung ladder: every rung up to this roll's rarity lights up. */
+.rarity-steps {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.rarity-steps li {
+  height: 10px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.25s, box-shadow 0.25s;
+}
+
+.rarity-steps li.is-lit {
+  background: var(--step);
+}
+
+.rarity-steps li.is-lit:last-of-type,
+.rarity-steps li.is-lit:has(+ li:not(.is-lit)) {
+  box-shadow: 0 0 10px var(--rarity);
+}
+
+.rarity-idle .rarity-name,
+.rarity-rolling .rarity-name,
+.rarity-rolling .rarity-xp-value {
+  color: var(--faint);
+}
+
+.rarity-rolling::before,
+.rarity-idle::before {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.stats-best {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stats-best .roll-text {
+  font-size: 16px;
+}
+
+.stats-best-rarity {
+  font-size: 12px;
+  font-weight: 800;
 }
 
 /* ── Roll stage ────────────────────────────────────────────────────── */
@@ -826,10 +861,6 @@ p {
   gap: 12px;
 }
 
-.stats-best {
-  font-size: 16px;
-}
-
 .mini-bar {
   display: block;
   height: 6px;
@@ -957,6 +988,23 @@ p {
 @keyframes toast-in {
   from {
     transform: translateY(-20px);
+    opacity: 0;
+  }
+}
+
+/* One column: the top of the screen is this roll's rarity, so the toast rises from the bottom. */
+@media (max-width: 900px) {
+  .toast {
+    top: auto;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    right: 16px;
+    animation-name: toast-up;
+  }
+}
+
+@keyframes toast-up {
+  from {
+    transform: translateY(20px);
     opacity: 0;
   }
 }

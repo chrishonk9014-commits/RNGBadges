@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import type { LeaderboardResponse, RegisterResponse, RollResponse, XpLeaderboardEntry, BestLeaderboardEntry, ProfileResponse, CatalogResponse } from '../src/shared/api';
+import { DatabaseSync } from 'node:sqlite';
+import type { LeaderboardResponse, RegisterResponse, RollResponse, CollectionLeaderboardEntry, BestLeaderboardEntry, ProfileResponse, CatalogResponse } from '../src/shared/api';
 import { allBadgeDefs } from '../src/shared/badges/catalog/index';
 import oddsJson from '../src/shared/badges/odds.json';
 import { BadgeRegistry, getRegistry } from '../src/shared/badges/registry';
 import type { RandomSource } from '../src/shared/rng';
+import { rarityForXp } from '../src/shared/progression';
 import { MAX_ROLL } from '../src/shared/roll';
 import { buildApp } from '../src/server/app';
 import { openDatabase, type Database } from '../src/server/db';
@@ -89,7 +94,7 @@ describe('accounts', () => {
 });
 
 describe('rolling', () => {
-  it('awards every badge on a roll, sorted worst to best, with stacked XP for new ones only', async () => {
+  it('scores every roll on its own: all its badges, found before or not', async () => {
     const { call, register, rng } = await setup();
     const { token } = await register();
     rng.queue(7);
@@ -102,16 +107,29 @@ describe('rolling', () => {
     expect(ids.at(-1)).toBe('ref.bond.only');
     for (let i = 1; i < r.badges.length; i++) expect(r.badges[i]!.xp).toBeGreaterThanOrEqual(r.badges[i - 1]!.xp);
     expect(r.badges.every((b) => b.isNew)).toBe(true);
-    expect(r.xpGained).toBe(r.badges.reduce((s, b) => s + b.xp, 0));
-    expect(r.player.xp).toBe(r.xpGained);
-    expect(r.rankUp).not.toBeNull();
+    expect(r.xp).toBe(r.badges.reduce((s, b) => s + b.xp, 0));
+    expect(r.rarity).toBe(rarityForXp(r.xp).id);
+    expect(r.bestImproved).toBe(true);
+    expect(r.player.bestXp).toBe(r.xp);
+    expect(r.player.uniqueBadges).toBe(r.badges.length);
 
+    // The same number again scores everything again, plus Déjà Vu; only Déjà Vu is new.
     rng.queue(7);
     const again = (await call<RollResponse>('POST', '/api/roll', token)).body;
     expect(again.badges.map((b) => b.id).sort()).toEqual([...ids, 'meta.deja-vu'].sort());
     expect(again.badges.filter((b) => b.isNew).map((b) => b.id)).toEqual(['meta.deja-vu']);
-    expect(again.xpGained).toBe(getRegistry().get('meta.deja-vu')!.xp);
+    expect(again.xp).toBe(r.xp + getRegistry().get('meta.deja-vu')!.xp);
     expect(again.rollNumber).toBe(2);
+    expect(again.player.uniqueBadges).toBe(r.badges.length + 1);
+
+    // A dull roll after a great one starts from zero; the best roll stays.
+    rng.queue(984_271);
+    const dull = (await call<RollResponse>('POST', '/api/roll', token)).body;
+    expect(dull.xp).toBe(dull.badges.reduce((s, b) => s + b.xp, 0));
+    expect(dull.xp).toBeLessThan(r.xp);
+    expect(dull.rarity).toBe(rarityForXp(dull.xp).id);
+    expect(dull.bestImproved).toBe(false);
+    expect(dull.player.bestXp).toBe(again.xp);
   });
 
   it('handles rolls with no badges', async () => {
@@ -126,7 +144,8 @@ describe('rolling', () => {
     rng.queue(quiet);
     const r = (await call<RollResponse>('POST', '/api/roll', token)).body;
     expect(r.badges).toEqual([]);
-    expect(r.xpGained).toBe(0);
+    expect(r.xp).toBe(0);
+    expect(r.rarity).toBe('common');
   });
 
   it('rolls 1000000 with skips and shows the skip markers', async () => {
@@ -159,39 +178,44 @@ describe('rolling', () => {
 
     const second = await setup({ db });
     const me = (await second.call<ProfileResponse>('GET', '/api/me', token)).body;
-    expect(me.player.xp).toBe(r.player.xp);
+    expect(me.player.bestXp).toBe(r.xp);
+    expect(me.player.uniqueBadges).toBe(r.badges.length);
+    expect(me.best?.roll).toBe('551267');
     expect(me.discoveries.map((d) => d.badgeId)).toContain('math.equation');
     expect(me.discoveries[0]!.roll).toBe('551267');
   });
 });
 
 describe('leaderboards', () => {
-  it('rank by XP and by best roll score, and place you even outside the top', async () => {
+  it('rank by best roll and by badges found, and place you even outside the top', async () => {
     const { call, register, rng, tick } = await setup();
     const a = await register('Ace');
     const b = await register('Bee');
     const c = await register('Cee');
-    rng.queue(7); // exact James Bond: huge score
+    rng.queue(7); // exact James Bond: a huge roll
     await call('POST', '/api/roll', a.token);
     tick(1000);
-    rng.queue(213_456);
-    await call('POST', '/api/roll', b.token);
+    rng.queue(213_456, 123_321, 551_267, 777_777); // lots of rolls: the biggest collection
+    for (let i = 0; i < 4; i++) await call('POST', '/api/roll', b.token);
     tick(1000);
-    rng.queue(999_999);
+    rng.queue(984_271);
     await call('POST', '/api/roll', c.token);
 
-    const xp = (await call<LeaderboardResponse<XpLeaderboardEntry>>('GET', '/api/leaderboard/xp?limit=2', b.token)).body;
-    expect(xp.entries.map((e) => e.username)).toHaveLength(2);
-    expect(xp.entries[0]!.username).toBe('Ace');
-    expect(xp.totalPlayers).toBe(3);
-    expect(xp.you?.username).toBe('Bee');
-    expect(xp.you!.rank).toBeGreaterThan(1);
-
-    const best = (await call<LeaderboardResponse<BestLeaderboardEntry>>('GET', '/api/leaderboard/best', a.token)).body;
+    const best = (await call<LeaderboardResponse<BestLeaderboardEntry>>('GET', '/api/leaderboard/best?limit=2', c.token)).body;
+    expect(best.entries).toHaveLength(2);
     expect(best.entries[0]!.username).toBe('Ace');
     expect(best.entries[0]!.roll).toBe('000007');
     expect(best.entries[0]!.badges[0]!.id).toBe('ref.bond.only');
-    expect(best.you?.rank).toBe(1);
+    expect(best.entries[0]!.rarity).toBe(rarityForXp(best.entries[0]!.xp).id);
+    expect(best.totalPlayers).toBe(3);
+    expect(best.you?.username).toBe('Cee');
+    expect(best.you!.rank).toBe(3);
+
+    const collection = (await call<LeaderboardResponse<CollectionLeaderboardEntry>>('GET', '/api/leaderboard/collection', a.token)).body;
+    expect(collection.entries[0]!.username).toBe('Bee');
+    const me = (await call<ProfileResponse>('GET', '/api/me', b.token)).body;
+    expect(collection.entries[0]!.badges).toBe(me.discoveries.length);
+    expect(collection.you?.username).toBe('Ace');
   });
 
   it('do not rank by numeric size', async () => {
@@ -223,12 +247,12 @@ describe('catalog', () => {
     expect(me.revealed.map((b) => b.name)).toContain('Skip!');
   });
 
-  it('rebuilds XP from discoveries when badge values change', async () => {
+  it('rescores best rolls when badge values change', async () => {
     const db = openDatabase(':memory:');
     const first = await setup({ db });
     const { token } = await first.register();
     first.rng.queue(551_267);
-    const before = (await first.call<RollResponse>('POST', '/api/roll', token)).body.player.xp;
+    const before = (await first.call<RollResponse>('POST', '/api/roll', token)).body.xp;
     await app!.close();
 
     const doubled = new BadgeRegistry(
@@ -237,6 +261,42 @@ describe('catalog', () => {
     );
     const second = await setup({ db, registry: doubled });
     const me = (await second.call<ProfileResponse>('GET', '/api/me', token)).body;
-    expect(me.player.xp).toBe(before * 2);
+    expect(me.player.bestXp).toBe(before * 2);
+    expect(me.best?.xp).toBe(before * 2);
+  });
+});
+
+describe('saves from before per-roll scoring', () => {
+  it('drop the running XP total and keep every discovery', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'rng-badges-'));
+    const path = join(dir, 'old.db');
+    const old = new DatabaseSync(path);
+    old.exec(`
+      CREATE TABLE players (
+        id INTEGER PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        xp INTEGER NOT NULL DEFAULT 0, xp_updated_at INTEGER NOT NULL DEFAULT 0, rolls INTEGER NOT NULL DEFAULT 0,
+        last_roll TEXT, best_score INTEGER NOT NULL DEFAULT 0, best_roll TEXT, best_badges TEXT, best_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE discoveries (
+        player_id INTEGER NOT NULL REFERENCES players (id) ON DELETE CASCADE, badge_id TEXT NOT NULL,
+        discovered_at INTEGER NOT NULL, roll TEXT NOT NULL, roll_number INTEGER NOT NULL, PRIMARY KEY (player_id, badge_id)
+      ) WITHOUT ROWID;
+      CREATE INDEX players_by_xp ON players (xp DESC, xp_updated_at ASC);
+      INSERT INTO players (id, token_hash, username, xp, xp_updated_at, rolls, created_at) VALUES (1, 'h', 'Old', 99999, 5, 2, 1);
+      INSERT INTO discoveries VALUES (1, 'ref.bond', 10, '210074', 1), (1, 'funny.21-start', 20, '210074', 1);
+    `);
+    old.close();
+
+    const db = openDatabase(path);
+    const columns = (db.prepare('PRAGMA table_info(players)').all() as Array<{ name: string }>).map((c) => c.name);
+    expect(columns).not.toContain('xp');
+    expect(columns).toContain('badge_count');
+    expect(db.prepare('SELECT badge_count, badge_count_at, rolls FROM players WHERE id = 1').get()).toEqual({ badge_count: 2, badge_count_at: 20, rolls: 2 });
+    expect((db.prepare('SELECT COUNT(*) AS n FROM discoveries').get() as { n: number }).n).toBe(2);
+    db.close();
+    // Opening again is a no-op.
+    openDatabase(path).close();
+    rmSync(dir, { recursive: true, force: true });
   });
 });

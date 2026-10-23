@@ -11,9 +11,9 @@ import {
   perfectNumbers,
   taxicabNumbers,
 } from '../src/shared/badges/numberTheory';
-import { computeOdds } from '../src/shared/badges/odds';
+import { computeOdds, computeRarityOdds, enumerateOutcomes } from '../src/shared/badges/odds';
 import oddsJson from '../src/shared/badges/odds.json';
-import { getRegistry } from '../src/shared/badges/registry';
+import { getRegistry, RARITY_ODDS } from '../src/shared/badges/registry';
 import type { BadgeDef, RollContext, RollFacts } from '../src/shared/badges/types';
 import { ROLL_OUTCOMES, normalRoll, pad6, sevenDigitRoll, skipCountProbability, type Roll } from '../src/shared/roll';
 import { seededRandom } from '../src/shared/rng';
@@ -198,8 +198,11 @@ describe('exact odds', () => {
   });
 
   it('are up to date with the catalog (`npm run odds`)', () => {
-    const fresh = computeOdds(defs);
+    const outcomes = enumerateOutcomes(defs);
+    const fresh = computeOdds(defs, outcomes);
     for (const d of defs) expect(fresh[d.id], d.id).toBeCloseTo(odds[d.id]!, 15);
+    // Roll rarity odds depend on the XP curve too, so they go stale when it changes.
+    expect(computeRarityOdds(defs, odds, undefined, outcomes)).toEqual(RARITY_ODDS);
   });
 });
 

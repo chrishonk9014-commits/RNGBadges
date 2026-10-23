@@ -10,15 +10,15 @@ import type {
   PlayerSummary,
   ProfileResponse,
   RegisterResponse,
+  CollectionLeaderboardEntry,
   RollResponse,
-  XpLeaderboardEntry,
 } from '../shared/api';
 import type { LocalTime } from '../shared/badges/types';
 import { compareBadgeQuality, getRegistry, type BadgeRegistry, type CatalogBadge } from '../shared/badges/registry';
 import { rarityForXp } from '../shared/progression';
 import type { RandomSource } from '../shared/rng';
 import { formatRoll, parseRoll, rollCells, rollNumber, type Roll } from '../shared/roll';
-import { rollScore, standoutBadges } from '../shared/scoring';
+import { rollXp, standoutBadges } from '../shared/scoring';
 import { getMeta, setMeta, transaction, type Database } from './db';
 import { generateUsername, usernameProblem } from './names';
 
@@ -38,10 +38,11 @@ export const cryptoRandom: RandomSource = { int: (maxExclusive) => randomInt(max
 interface PlayerRow {
   id: number;
   username: string;
-  xp: number;
-  xp_updated_at: number;
   rolls: number;
   last_roll: string | null;
+  badge_count: number;
+  badge_count_at: number;
+  /** XP of the player's best roll. */
   best_score: number;
   best_roll: string | null;
   best_badges: string | null;
@@ -54,6 +55,9 @@ export interface GameOptions {
   rng?: RandomSource;
   now?: () => number;
 }
+
+const PLAYER_COLUMNS =
+  'id, username, rolls, last_roll, badge_count, badge_count_at, best_score, best_roll, best_badges, best_at';
 
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
@@ -110,7 +114,7 @@ export class GameService {
     const token = randomBytes(32).toString('base64url');
     const t = this.now();
     const result = this.db
-      .prepare('INSERT INTO players (token_hash, username, xp_updated_at, created_at) VALUES (?, ?, ?, ?)')
+      .prepare('INSERT INTO players (token_hash, username, badge_count_at, created_at) VALUES (?, ?, ?, ?)')
       .run(hashToken(token), username, t, t);
     return { token, player: this.summary(this.playerById(Number(result.lastInsertRowid))!) };
   }
@@ -148,7 +152,8 @@ export class GameService {
       local: localTime(t, offset),
     });
     const earned = ids.map((id) => this.registry.get(id)!).sort(compareBadgeQuality);
-    const score = rollScore(earned);
+    // The roll is scored on its own: every badge it earned counts, found before or not.
+    const xp = rollXp(earned);
 
     const { fresh, bestImproved } = transaction(this.db, () => {
       const owned = this.ownedAmong(playerId, ids);
@@ -157,44 +162,41 @@ export class GameService {
         'INSERT INTO discoveries (player_id, badge_id, discovered_at, roll, roll_number) VALUES (?, ?, ?, ?, ?)',
       );
       for (const b of fresh) insert.run(playerId, b.id, t, text, number);
-      const gained = fresh.reduce((sum, b) => sum + b.xp, 0);
-      const bestImproved = score > before.best_score;
+      const bestImproved = xp > before.best_score;
+      const improved = bestImproved ? 1 : 0;
       this.db
         .prepare(
           `UPDATE players SET
-             xp = xp + ?, xp_updated_at = CASE WHEN ? > 0 THEN ? ELSE xp_updated_at END,
              rolls = rolls + 1, last_roll = ?,
-             best_score = CASE WHEN ? THEN ? ELSE best_score END,
-             best_roll  = CASE WHEN ? THEN ? ELSE best_roll END,
+             badge_count = badge_count + ?, badge_count_at = CASE WHEN ? > 0 THEN ? ELSE badge_count_at END,
+             best_score  = CASE WHEN ? THEN ? ELSE best_score END,
+             best_roll   = CASE WHEN ? THEN ? ELSE best_roll END,
              best_badges = CASE WHEN ? THEN ? ELSE best_badges END,
-             best_at    = CASE WHEN ? THEN ? ELSE best_at END
+             best_at     = CASE WHEN ? THEN ? ELSE best_at END
            WHERE id = ?`,
         )
         .run(
-          gained, gained, t,
           text,
-          bestImproved ? 1 : 0, score,
-          bestImproved ? 1 : 0, text,
-          bestImproved ? 1 : 0, JSON.stringify(ids),
-          bestImproved ? 1 : 0, t,
+          fresh.length, fresh.length, t,
+          improved, xp,
+          improved, text,
+          improved, JSON.stringify(ids),
+          improved, t,
           playerId,
         );
       return { fresh: new Set(fresh.map((b) => b.id)), bestImproved };
     });
 
     const after = this.requirePlayer(playerId);
-    const from = rarityForXp(before.xp).id;
-    const to = rarityForXp(after.xp).id;
     const badges: AwardedBadge[] = earned.map((b) => ({ ...this.view(b, true), isNew: fresh.has(b.id) }));
     return {
       id: randomUUID(),
       rollNumber: number,
       roll: this.rollView(roll),
       badges,
-      xpGained: after.xp - before.xp,
-      score,
+      xp,
+      rarity: rarityForXp(xp).id,
       bestImproved,
-      rankUp: from === to ? null : { from, to },
       player: this.summary(after),
     };
   }
@@ -221,44 +223,44 @@ export class GameService {
   catalog(): CatalogResponse {
     this.catalogCache ??= {
       version: this.catalogVersion,
-      totalXp: this.registry.totalXp,
       badges: this.registry.badges.map((b) => this.view(b, !b.hidden)),
     };
     return this.catalogCache;
   }
 
-  xpLeaderboard(limit: number, playerId: number | null): LeaderboardResponse<XpLeaderboardEntry> {
+  /** Most distinct badges found; ties go to whoever got there first. */
+  collectionLeaderboard(limit: number, playerId: number | null): LeaderboardResponse<CollectionLeaderboardEntry> {
     const rows = this.db
-      .prepare('SELECT id, username, xp FROM players WHERE rolls > 0 ORDER BY xp DESC, xp_updated_at ASC, id ASC LIMIT ?')
-      .all(limit) as Array<{ id: number; username: string; xp: number }>;
-    const entry = (r: { id: number; username: string; xp: number }, rank: number): XpLeaderboardEntry => ({
+      .prepare('SELECT id, username, badge_count FROM players WHERE rolls > 0 ORDER BY badge_count DESC, badge_count_at ASC, id ASC LIMIT ?')
+      .all(limit) as Array<{ id: number; username: string; badge_count: number }>;
+    const entry = (r: { id: number; username: string; badge_count: number }, rank: number): CollectionLeaderboardEntry => ({
       rank,
       playerId: r.id,
       username: r.username,
-      xp: r.xp,
-      rarity: rarityForXp(r.xp).id,
+      badges: r.badge_count,
     });
     const entries = rows.map((r, i) => entry(r, i + 1));
-    let you: XpLeaderboardEntry | null = entries.find((e) => e.playerId === playerId) ?? null;
+    let you: CollectionLeaderboardEntry | null = entries.find((e) => e.playerId === playerId) ?? null;
     if (!you && playerId !== null) {
       const me = this.playerById(playerId);
       if (me && me.rolls > 0) {
         const { ahead } = this.db
           .prepare(
             `SELECT COUNT(*) AS ahead FROM players WHERE rolls > 0 AND (
-               xp > ? OR (xp = ? AND xp_updated_at < ?) OR (xp = ? AND xp_updated_at = ? AND id < ?))`,
+               badge_count > ? OR (badge_count = ? AND badge_count_at < ?) OR (badge_count = ? AND badge_count_at = ? AND id < ?))`,
           )
-          .get(me.xp, me.xp, me.xp_updated_at, me.xp, me.xp_updated_at, me.id) as { ahead: number };
+          .get(me.badge_count, me.badge_count, me.badge_count_at, me.badge_count, me.badge_count_at, me.id) as { ahead: number };
         you = entry(me, ahead + 1);
       }
     }
     return { entries, totalPlayers: this.activePlayers(), you };
   }
 
+  /** Each player's best single roll, by its XP. */
   bestLeaderboard(limit: number, playerId: number | null): LeaderboardResponse<BestLeaderboardEntry> {
     const rows = this.db
       .prepare(
-        `SELECT id, username, xp, xp_updated_at, rolls, last_roll, best_score, best_roll, best_badges, best_at
+        `SELECT ${PLAYER_COLUMNS}
          FROM players WHERE best_score > 0 ORDER BY best_score DESC, best_at ASC, id ASC LIMIT ?`,
       )
       .all(limit) as unknown as PlayerRow[];
@@ -300,19 +302,13 @@ export class GameService {
   // ── Internals ───────────────────────────────────────────────────────────
 
   /**
-   * XP is the sum of discovered badges' current values. When badge XP changes
-   * between releases, every player's total and best-roll score are rebuilt
-   * from their discoveries so the leaderboards stay consistent.
+   * A best roll's XP is the sum of its badges' current values. When badge XP
+   * changes between releases, every stored best roll is rescored from its
+   * badges and badge counts are recounted, so the leaderboards stay consistent.
    */
   private syncCatalogVersion(): void {
     if (getMeta(this.db, 'catalog_version') === this.catalogVersion) return;
     transaction(this.db, () => {
-      this.db.exec('CREATE TEMP TABLE IF NOT EXISTS badge_xp (id TEXT PRIMARY KEY, xp INTEGER NOT NULL)');
-      this.db.exec('DELETE FROM badge_xp');
-      const insert = this.db.prepare('INSERT INTO badge_xp (id, xp) VALUES (?, ?)');
-      for (const b of this.registry.badges) insert.run(b.id, b.xp);
-      this.db.exec(`UPDATE players SET xp = COALESCE(
-        (SELECT SUM(x.xp) FROM discoveries d JOIN badge_xp x ON x.id = d.badge_id WHERE d.player_id = players.id), 0)`);
       const best = this.db.prepare('SELECT id, best_badges FROM players WHERE best_badges IS NOT NULL').all() as Array<{
         id: number;
         best_badges: string;
@@ -320,8 +316,15 @@ export class GameService {
       const update = this.db.prepare('UPDATE players SET best_score = ? WHERE id = ?');
       for (const row of best) {
         const badges = (JSON.parse(row.best_badges) as string[]).flatMap((id) => this.registry.get(id) ?? []);
-        update.run(rollScore(badges), row.id);
+        update.run(rollXp(badges), row.id);
       }
+      const known = new Set(this.registry.badges.map((b) => b.id));
+      const counts = this.db.prepare('SELECT player_id, badge_id FROM discoveries').all() as Array<{ player_id: number; badge_id: string }>;
+      const perPlayer = new Map<number, number>();
+      for (const c of counts) if (known.has(c.badge_id)) perPlayer.set(c.player_id, (perPlayer.get(c.player_id) ?? 0) + 1);
+      this.db.exec('UPDATE players SET badge_count = 0');
+      const setCount = this.db.prepare('UPDATE players SET badge_count = ? WHERE id = ?');
+      for (const [id, n] of perPlayer) setCount.run(n, id);
       setMeta(this.db, 'catalog_version', this.catalogVersion);
     });
   }
@@ -339,11 +342,7 @@ export class GameService {
   }
 
   private playerById(id: number): PlayerRow | undefined {
-    return this.db
-      .prepare(
-        'SELECT id, username, xp, xp_updated_at, rolls, last_roll, best_score, best_roll, best_badges, best_at FROM players WHERE id = ?',
-      )
-      .get(id) as PlayerRow | undefined;
+    return this.db.prepare(`SELECT ${PLAYER_COLUMNS} FROM players WHERE id = ?`).get(id) as PlayerRow | undefined;
   }
 
   private requirePlayer(id: number): PlayerRow {
@@ -357,8 +356,14 @@ export class GameService {
   }
 
   private summary(row: PlayerRow): PlayerSummary {
-    const { n } = this.db.prepare('SELECT COUNT(*) AS n FROM discoveries WHERE player_id = ?').get(row.id) as { n: number };
-    return { id: row.id, username: row.username, xp: row.xp, rarity: rarityForXp(row.xp).id, rolls: row.rolls, uniqueBadges: n };
+    return {
+      id: row.id,
+      username: row.username,
+      rolls: row.rolls,
+      uniqueBadges: row.badge_count,
+      bestXp: row.best_score,
+      bestRarity: rarityForXp(row.best_score).id,
+    };
   }
 
   private bestRoll(row: PlayerRow): BestRoll | null {
@@ -366,7 +371,8 @@ export class GameService {
     const badges = (JSON.parse(row.best_badges) as string[]).flatMap((id) => this.registry.get(id) ?? []);
     return {
       roll: row.best_roll,
-      score: row.best_score,
+      xp: row.best_score,
+      rarity: rarityForXp(row.best_score).id,
       at: row.best_at,
       badges: standoutBadges(badges).map((b) => ({ id: b.id, name: b.name, tier: b.tier, xp: b.xp })),
     };

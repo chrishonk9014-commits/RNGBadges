@@ -53,29 +53,6 @@ export const FAMILIES: Array<{ category: CategoryId; title: string; blurb: strin
   { category: 'meta', title: 'Secrets', blurb: 'Badges about you as much as the number. Find them to learn their names.', examples: [] },
 ];
 
-/**
- * Median time to reach each rarity at two rolls a second, from `npm run balance`
- * (see BALANCE.md). Update alongside the balance report.
- */
-export const MEDIAN_TIME: Record<string, string> = {
-  common: 'start',
-  uncommon: '5 sec',
-  notable: '21 sec',
-  rare: '2 min',
-  epic: '5 min',
-  legendary: '16 min',
-  mythic: '27 min',
-  exotic: '27 min',
-  divine: '1.1 hr',
-  celestial: '1.7 hr',
-  transcendent: '3.7 hr',
-  cosmic: '7.7 hr',
-  universal: '16 hr',
-  omniversal: '34 hr',
-  unfathomable: '80 hr',
-  infinite: '290 hr',
-};
-
 export const FAQ: Array<{ q: string; a: string }> = [
   {
     q: 'Are the rolls really random?',
@@ -86,8 +63,12 @@ export const FAQ: Array<{ q: string; a: string }> = [
     a: 'Your first visit creates a player and a private save code. Progress lives on the server, and the save code lets you continue on another device. Rolls in the demo on this page are not saved.',
   },
   {
-    q: 'Do I get XP for finding the same badge twice?',
-    a: 'No. Each badge pays XP once, the first time you find it. It still shows up in your Badges Collected list every time you roll it.',
+    q: 'How is a roll’s rarity decided?',
+    a: 'Every badge in the number adds its XP to the roll. The total picks the rarity: 100 XP makes a roll Uncommon, 3,000 Legendary, 200,000 Cosmic and 3,200,000 INFINITE. The next roll starts again from zero.',
+  },
+  {
+    q: 'Does a badge I already have still count?',
+    a: 'Yes. Every badge counts toward every roll it appears in. Finding one for the first time also adds it to your collection, which has its own leaderboard.',
   },
   {
     q: 'What is the rarest badge?',

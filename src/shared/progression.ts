@@ -1,6 +1,8 @@
 /**
- * Player rarity ladder. Cumulative XP thresholds live here and nowhere else;
- * change them here and every screen, the server and the balance report follow.
+ * The rarity ladder for a single roll. A roll's rarity is the highest rung
+ * its XP reaches; the next roll starts from zero again. Thresholds live here
+ * and nowhere else; change them here and every screen, the server and the
+ * balance report follow.
  */
 export interface Rarity {
   id: string;
@@ -33,7 +35,7 @@ export const RARITIES: readonly Rarity[] = [
 export interface RarityProgress {
   current: Rarity;
   next: Rarity | null;
-  /** XP earned since reaching the current rarity. */
+  /** XP above the current rarity's threshold. */
   intoLevel: number;
   /** XP the current level spans (0 at the top). */
   levelSpan: number;

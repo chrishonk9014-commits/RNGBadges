@@ -2,7 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useState, type CSSProperties } fr
 import type { BadgeStatsResponse, BadgeView, CatalogResponse, Discovery, PlayerSummary } from '../../shared/api';
 import type { CategoryId } from '../../shared/badges/types';
 import { api } from '../api';
-import { BADGE_TIERS, CATEGORY_NAMES, formatNumber, formatOdds, tier, timeAgo } from '../format';
+import { BADGE_TIERS, CATEGORY_NAMES, formatNumber, formatOdds, rarity, tier, timeAgo } from '../format';
 import { IconLock, IconSearch } from './Icons';
 import { RollText } from './RollNumber';
 import { Sheet } from './Sheet';
@@ -81,9 +81,15 @@ export function CollectionSheet({ catalog, player, discoveries, revealed, onClos
           <p className="collection-count">{pct.toFixed(1)}%</p>
         </div>
         <div>
-          <p className="stats-label">XP from badges</p>
-          <p className="collection-count">
-            {formatNumber(player.xp)} <small>/ {formatNumber(catalog.totalXp)}</small>
+          <p className="stats-label">Best roll</p>
+          <p className="collection-count" style={{ color: rarity(player.bestRarity).color }}>
+            {player.bestXp > 0 ? (
+              <>
+                {formatNumber(player.bestXp)} <small>XP · {rarity(player.bestRarity).name}</small>
+              </>
+            ) : (
+              '—'
+            )}
           </p>
         </div>
         <div className="mini-bar collection-bar" aria-hidden>
@@ -173,7 +179,7 @@ function CollectionCard({ badge, discovery, stats }: { badge: BadgeView; discove
             <IconLock />
           </span>
         )}
-        <span className="collection-card-xp">{formatNumber(badge.xp)} XP</span>
+        <span className="collection-card-xp">+{formatNumber(badge.xp)} XP</span>
       </div>
       <h3>{badge.name}</h3>
       <p className="collection-card-desc">{badge.description}</p>

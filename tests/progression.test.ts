@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { compareBadgeQuality, getRegistry, type CatalogBadge } from '../src/shared/badges/registry';
+import { compareBadgeQuality, getRegistry, RARITY_ODDS, type CatalogBadge } from '../src/shared/badges/registry';
+import { parseRoll } from '../src/shared/roll';
 import { RARITIES, rarityForXp, rarityProgress } from '../src/shared/progression';
-import { rollScore, standoutBadges } from '../src/shared/scoring';
+import { rollRarity, rollXp, standoutBadges } from '../src/shared/scoring';
 import { BADGE_TIERS, XP_CURVE, roundXp, tierForProbability, xpForProbability } from '../src/shared/xp';
 import { REVEAL, revealOffsets, shownAt } from '../src/client/reveal';
 
@@ -38,6 +39,49 @@ describe('rarity ladder', () => {
     expect(p.next?.name).toBe('Notable');
     expect(p.fraction).toBeCloseTo(0.5);
     expect(rarityProgress(5_000_000).fraction).toBe(1);
+  });
+});
+
+describe('roll rarity balance', () => {
+  const registry = getRegistry();
+  const rarityOf = (text: string) => {
+    const roll = parseRoll(text);
+    if (!roll) throw new Error(text);
+    return rollRarity(registry.detectorInstance.detect(roll).map((id) => registry.get(id)!)).name;
+  };
+
+  it('puts the famous rolls where the ladder promises', () => {
+    expect(rarityOf('000007')).toBe('Universal');
+    expect(rarityOf('000000')).toBe('Omniversal');
+    expect(rarityOf('1000000')).toBe('Unfathomable');
+    expect(rarityOf('(skip)000000')).toBe('INFINITE');
+    expect(rarityOf('(skip)(skip)(skip)(skip)(skip)(skip)(skip)')).toBe('INFINITE');
+  });
+
+  it('makes every one-in-a-million badge a jackpot on its own', () => {
+    const cosmic = RARITIES.find((r) => r.id === 'cosmic')!.minXp;
+    expect(registry.get('ref.bond.only')!.probability).toBeLessThanOrEqual(1e-6);
+    for (const badge of registry.badges) {
+      if (badge.probability <= 1e-6) expect(badge.xp, badge.id).toBeGreaterThanOrEqual(cosmic);
+    }
+  });
+
+  it('pays more the closer a reference gets to the whole number', () => {
+    const bond = ['ref.bond', 'ref.bond.ends', 'ref.bond.only'].map((id) => registry.get(id)!.xp);
+    expect(bond[0]!).toBeLessThan(bond[1]!);
+    expect(bond[1]!).toBeLessThan(bond[2]!);
+  });
+
+  it('gets rarer all the way up the ladder', () => {
+    let last = 2;
+    for (const r of RARITIES) {
+      const odds = RARITY_ODDS[r.id];
+      expect(odds, r.id).toBeDefined();
+      expect(odds!.atLeast, r.id).toBeLessThan(last);
+      expect(odds!.band, r.id).toBeLessThanOrEqual(odds!.atLeast);
+      last = odds!.atLeast;
+    }
+    expect(RARITY_ODDS.common!.atLeast).toBe(1);
   });
 });
 
@@ -90,8 +134,10 @@ describe('roll quality and score', () => {
   });
 
   it('scores a roll by the value of everything it triggered', () => {
-    expect(rollScore([])).toBe(0);
-    expect(rollScore([b('a', 5, 0.1), b('b', 17_000, 1e-6)])).toBe(17_005);
+    expect(rollXp([])).toBe(0);
+    expect(rollRarity([]).id).toBe('common');
+    expect(rollXp([b('a', 5, 0.1), b('b', 17_000, 1e-6)])).toBe(17_005);
+    expect(rollRarity([b('a', 5, 0.1), b('b', 17_000, 1e-6)]).name).toBe('Exotic');
     expect(standoutBadges([b('a', 5, 0.1), b('b', 17_000, 1e-6), b('c', 30, 1e-3)], 2).map((x) => x.id)).toEqual(['b', 'c']);
   });
 });

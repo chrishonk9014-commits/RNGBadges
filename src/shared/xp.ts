@@ -1,25 +1,43 @@
 /**
  * Badge XP and badge tiers.
  *
- * A badge's XP comes from how rare it is. The curve is a set of anchor points
- * (odds "1 in N" → XP) joined by straight lines on a log-log scale, so XP
- * rises smoothly with rarity. Its shape was tuned with `npm run balance` (see
- * BALANCE.md): cheap badges carry the first few ranks, one-in-a-million badges
- * carry the long game. Any badge can override its XP in its definition.
+ * Every roll is scored on its own: its XP is the sum of the XP of every badge
+ * in the number, and that total decides the roll's rarity (progression.ts).
+ *
+ * A badge's XP comes from its odds through this curve: anchor points (odds
+ * "1 in N" → XP) joined on a log-log scale, so rarer always pays more. The
+ * points were placed with the exact distribution of all 1,000,001 rolls
+ * (`npm run balance`, BALANCE.md) so each rarity is rarer than the one below
+ * it. Notes on the shape:
+ * - A reference's tiers stack in one roll (ending in 1337 also contains it),
+ *   so "contains" + "ends in" are priced as a pair: 4-digit ones land in
+ *   Legendary, then Mythic.
+ * - One-in-a-million badges (exact matches) are a Cosmic jackpot on their own;
+ *   what else the number holds lifts the best of them to Universal.
+ * - 1000000 is Unfathomable and any skip is INFINITE.
+ * Any badge can still override its XP in its definition.
  */
 export const XP_CURVE = {
   points: [
     [1, 5],
-    [200, 5],
-    [1_000, 10],
-    [10_000, 30],
-    [100_000, 300],
-    [1_000_000, 16_500],
-    [10_000_000, 150_000],
-    [1_000_000_000, 1_000_000],
+    [4, 10],
+    [20, 25],
+    [100, 120],
+    [250, 350],
+    [1_000, 900],
+    [3_333, 1_700],
+    [10_000, 3_500],
+    [30_000, 13_000],
+    [50_000, 26_000],
+    [100_000, 110_000],
+    [250_000, 190_000],
+    [1_000_000, 350_000],
+    [1_111_112, 1_600_000],
+    [11_111_122, 3_200_000],
+    [10_000_000_000_000, 1_000_000_000],
   ] as Array<[odds: number, xp: number]>,
   minXp: 5,
-  maxXp: 1_000_000,
+  maxXp: 1_000_000_000,
 };
 
 export type XpCurve = typeof XP_CURVE;

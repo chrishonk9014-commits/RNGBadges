@@ -19,17 +19,18 @@ export interface BadgeView {
 
 export interface CatalogResponse {
   version: string;
-  totalXp: number;
   badges: BadgeView[];
 }
 
 export interface PlayerSummary {
   id: number;
   username: string;
-  xp: number;
-  rarity: string;
   rolls: number;
+  /** Distinct badges this player has ever found. */
   uniqueBadges: number;
+  /** XP of this player's best roll so far (0 before the first roll). */
+  bestXp: number;
+  bestRarity: string;
 }
 
 export interface RollView {
@@ -41,6 +42,7 @@ export interface RollView {
 }
 
 export interface AwardedBadge extends BadgeView {
+  /** First time this player has found this badge (it joins their collection). */
   isNew: boolean;
 }
 
@@ -50,10 +52,12 @@ export interface RollResponse {
   roll: RollView;
   /** Every badge this roll earned, worst first and best last. */
   badges: AwardedBadge[];
-  xpGained: number;
-  score: number;
+  /** The roll's XP: every badge's XP added together. */
+  xp: number;
+  /** The roll's rarity, from its XP. */
+  rarity: string;
+  /** This roll beat the player's previous best. */
   bestImproved: boolean;
-  rankUp: { from: string; to: string } | null;
   player: PlayerSummary;
 }
 
@@ -74,7 +78,8 @@ export interface ProfileResponse {
 
 export interface BestRoll {
   roll: string;
-  score: number;
+  xp: number;
+  rarity: string;
   at: number;
   badges: Array<Pick<BadgeView, 'id' | 'name' | 'tier' | 'xp'>>;
 }
@@ -84,12 +89,12 @@ export interface RegisterResponse {
   player: PlayerSummary;
 }
 
-export interface XpLeaderboardEntry {
+export interface CollectionLeaderboardEntry {
   rank: number;
   playerId: number;
   username: string;
-  xp: number;
-  rarity: string;
+  /** Distinct badges found. */
+  badges: number;
 }
 
 export interface BestLeaderboardEntry extends BestRoll {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getRegistry } from '../src/shared/badges/registry';
-import { RARITIES } from '../src/shared/progression';
-import { FAMILIES, MEDIAN_TIME, SHOWCASE } from '../src/client/site/content';
+import { FAMILIES, SHOWCASE } from '../src/client/site/content';
 import { badgesFor, readNumber } from '../src/client/site/engine';
 
 describe('website content', () => {
@@ -27,10 +26,6 @@ describe('website content', () => {
     }
     expect(badgesFor(readNumber('551267')!).at(-1)!.id).toBe('math.equation');
     expect(badgesFor(readNumber('000007')!).at(-1)!.id).toBe('ref.bond.only');
-  });
-
-  it('has a time for every rarity', () => {
-    for (const r of RARITIES) expect(MEDIAN_TIME[r.id], r.id).toBeDefined();
   });
 });
 

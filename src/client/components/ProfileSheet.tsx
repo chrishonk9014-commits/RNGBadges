@@ -93,8 +93,8 @@ export function ProfileSheet({ player, token, motion, onMotion, onRename, onRest
           <dd>{formatNumber(player.uniqueBadges)}</dd>
         </div>
         <div>
-          <dt>XP</dt>
-          <dd>{formatNumber(player.xp)}</dd>
+          <dt>Best roll</dt>
+          <dd>{player.bestXp > 0 ? `${formatNumber(player.bestXp)} XP` : '—'}</dd>
         </div>
       </dl>
 

@@ -3,7 +3,7 @@ import type { PlayerSummary, RollResponse } from '../../shared/api';
 import { rarityForXp } from '../../shared/progression';
 import { rollNumber, type Roll } from '../../shared/roll';
 import { BadgesCollected } from '../components/BadgesCollected';
-import { RarityPanel } from '../components/Panels';
+import { RollRarityPanel, type RollPanelStatus } from '../components/Panels';
 import { RollStage } from '../components/RollStage';
 import { formatNumber, formatOdds, tier } from '../format';
 import { badgesFor, browserRandom, buildRollResponse, localNow, readNumber } from './engine';
@@ -15,8 +15,9 @@ export function DemoRoller({ reducedMotion }: { reducedMotion: boolean }) {
   const [rolling, setRolling] = useState(false);
   const [landedId, setLandedId] = useState<string | null>(null);
   const [revealedId, setRevealedId] = useState<string | null>(null);
-  const session = useRef({ rolls: 0, xp: 0, owned: new Set<string>(), last: null as Roll | null, current: null as RollResponse | null });
-  const [, force] = useState(0);
+  const [progress, setProgress] = useState<{ id: string; shown: number } | null>(null);
+  const session = useRef({ rolls: 0, bestXp: 0, owned: new Set<string>(), last: null as Roll | null, current: null as RollResponse | null });
+  const onProgress = useCallback((id: string, shown: number) => setProgress({ id, shown }), []);
 
   const roll = useCallback(() => {
     if (rolling) return;
@@ -27,17 +28,23 @@ export function DemoRoller({ reducedMotion }: { reducedMotion: boolean }) {
       const r = rollNumber(browserRandom);
       const number = s.rolls + 1;
       const badges = badgesFor(r, { previous: s.last, rollNumber: number, local: localNow() });
-      const player: PlayerSummary = { id: 0, username: 'demo', xp: 0, rarity: 'common', rolls: number, uniqueBadges: 0 };
+      const player: PlayerSummary = {
+        id: 0,
+        username: 'demo',
+        rolls: number,
+        uniqueBadges: s.owned.size,
+        bestXp: s.bestXp,
+        bestRarity: rarityForXp(s.bestXp).id,
+      };
       const res = buildRollResponse(`demo-${number}`, number, r, badges, s.owned, player);
       s.rolls = number;
       s.last = r;
-      s.xp += res.xpGained;
+      s.bestXp = Math.max(s.bestXp, res.xp);
       for (const b of badges) s.owned.add(b.id);
       setPrevious(s.current);
       setCurrent(res);
       s.current = res;
       setRolling(false);
-      force((n) => n + 1);
     }, 120);
   }, [rolling]);
 
@@ -45,39 +52,40 @@ export function DemoRoller({ reducedMotion }: { reducedMotion: boolean }) {
   const landed = current !== null && landedId === current.id;
   const shown = landed ? current : rolling ? current : previous;
   const mode = landed && !rolling ? 'animate' : shown ? 'instant' : 'wait';
-  // Session totals wait for the reveal, like the real game.
-  const pendingXp = current && revealedId !== current.id ? current.xpGained : 0;
-  const pendingBadges = current && revealedId !== current.id ? current.badges.filter((b) => b.isNew).length : 0;
-  const xp = s.xp - pendingXp;
-  const demoPlayer: PlayerSummary = {
-    id: 0,
-    username: 'demo',
-    xp,
-    rarity: rarityForXp(xp).id,
-    rolls: s.rolls,
-    uniqueBadges: s.owned.size - pendingBadges,
-  };
+  // Same as the game: the panel resets while the number spins, then climbs with the reveal.
+  let panelXp = 0;
+  let status: RollPanelStatus = 'idle';
+  if (rolling || (current && !landed)) status = 'rolling';
+  else if (current && revealedId === current.id) {
+    panelXp = current.xp;
+    status = 'final';
+  } else if (current) {
+    const count = progress?.id === current.id ? progress.shown : 0;
+    panelXp = current.badges.slice(0, count).reduce((sum, b) => sum + b.xp, 0);
+    status = 'counting';
+  }
+  const bestRarity = rarityForXp(s.bestXp);
 
   return (
     <div className="demo-console">
-      <RarityPanel player={demoPlayer} />
+      <RollRarityPanel xp={panelXp} status={status} />
       <RollStage roll={current?.roll ?? null} rollId={current?.id ?? null} rolling={rolling} reducedMotion={reducedMotion} glow={null} onLanded={setLandedId} />
       <div className="roll-row">
         <button type="button" className="roll-button" onClick={roll} disabled={rolling}>
           {rolling ? 'Rolling…' : 'Roll'}
         </button>
         <p className="demo-session">
-          Demo session: {formatNumber(s.rolls)} roll{s.rolls === 1 ? '' : 's'} · {formatNumber(demoPlayer.uniqueBadges)} badges found · not saved
+          Demo: {formatNumber(s.rolls)} roll{s.rolls === 1 ? '' : 's'}
+          {s.rolls > 0 && (
+            <>
+              {' '}
+              · best <span style={{ color: bestRarity.color }}>{bestRarity.name}</span> ({formatNumber(s.bestXp)} XP)
+            </>
+          )}{' '}
+          · not saved
         </p>
       </div>
-      <BadgesCollected
-        key={shown?.id ?? 'none'}
-        roll={shown}
-        mode={mode}
-        reducedMotion={reducedMotion}
-        onComplete={setRevealedId}
-        onProgress={() => {}}
-      />
+      <BadgesCollected key={shown?.id ?? 'none'} roll={shown} mode={mode} reducedMotion={reducedMotion} onComplete={setRevealedId} onProgress={onProgress} />
     </div>
   );
 }
@@ -112,7 +120,8 @@ export function NumberChecker() {
       {roll && (
         <>
           <p className="checker-summary" aria-live="polite">
-            <strong>{badges.length}</strong> badge{badges.length === 1 ? '' : 's'} · worth <strong>{formatNumber(xp)} XP</strong> on a first find
+            <strong>{badges.length}</strong> badge{badges.length === 1 ? '' : 's'} · <strong>{formatNumber(xp)} XP</strong> ·{' '}
+            <strong style={{ color: rarityForXp(xp).color }}>{rarityForXp(xp).name}</strong> roll
           </p>
           {badges.length === 0 ? (
             <p className="checker-empty">Nothing here. About one roll in seventeen earns no badges at all.</p>

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import type { BestLeaderboardEntry, LeaderboardResponse, XpLeaderboardEntry } from '../../shared/api';
-import { RARITIES } from '../../shared/progression';
+import type { BestLeaderboardEntry, CollectionLeaderboardEntry, LeaderboardResponse } from '../../shared/api';
+import { RARITY_ODDS } from '../../shared/badges/registry';
+import { RARITIES, rarityForXp } from '../../shared/progression';
+import { rollXp } from '../../shared/scoring';
 import { ROLL_OUTCOMES, SEVEN_DIGIT_NUMBER, formatRoll, sevenDigitRoll, skipCountProbability } from '../../shared/roll';
 import { api } from '../api';
 import { RollText, cellsFromText } from '../components/RollNumber';
 import { CATEGORY_NAMES, formatNumber, formatOdds, rarity, rarityPaint, tier, useSystemReducedMotion } from '../format';
-import { FAMILIES, FAQ, MEDIAN_TIME, SHOWCASE } from './content';
+import { FAMILIES, FAQ, SHOWCASE } from './content';
 import { DemoRoller, NumberChecker } from './Demo';
 import { badgesFor, readNumber, registry } from './engine';
 
@@ -109,7 +111,8 @@ function Hero({ reducedMotion }: { reducedMotion: boolean }) {
     () =>
       SHOWCASE.map((s) => {
         const badges = badgesFor(readNumber(s.roll)!);
-        return { ...s, best: badges.at(-1)!, others: badges.length - 1 };
+        const xp = rollXp(badges);
+        return { ...s, best: badges.at(-1)!, count: badges.length, xp, rarity: rarityForXp(xp) };
       }),
     [],
   );
@@ -122,6 +125,7 @@ function Hero({ reducedMotion }: { reducedMotion: boolean }) {
 
   const ex = examples[index]!;
   const t = tier(ex.best.tier);
+  const rr = ex.rarity;
   return (
     <section className="hero">
       <div className="wrap hero-grid">
@@ -130,7 +134,7 @@ function Hero({ reducedMotion }: { reducedMotion: boolean }) {
           <h1>Every number is hiding something.</h1>
           <p className="lede">
             Roll one of {formatNumber(ROLL_OUTCOMES)} numbers. RNG Badges checks it against {formatNumber(BADGE_COUNT)} hand-made badges, from movie references to
-            math to poker hands, and pays XP for every first find.
+            math to poker hands. Every badge adds XP, and the total decides how rare your roll is, from Common to INFINITE.
           </p>
           <div className="hero-actions">
             <PlayLink className="button-big">Play now</PlayLink>
@@ -142,7 +146,7 @@ function Hero({ reducedMotion }: { reducedMotion: boolean }) {
 
         <figure
           className="scoreboard"
-          style={{ '--tier': t.color } as CSSProperties}
+          style={{ '--tier': rr.color, '--rarity-paint': rarityPaint(rr) } as CSSProperties}
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
           onFocus={() => setPaused(true)}
@@ -158,18 +162,24 @@ function Hero({ reducedMotion }: { reducedMotion: boolean }) {
             <Tiles text={ex.roll} />
           </div>
           <div className="sb-result" key={`r${index}`}>
-            <span className="sb-tier">{t.name}</span>
-            <strong className="sb-badge">{ex.best.name}</strong>
+            <span className="sb-rarity">
+              <span className="sb-rarity-name">{rr.name} roll</span>
+              <span className="sb-rarity-xp">{formatNumber(ex.xp)} XP</span>
+            </span>
+            <strong className="sb-badge" style={{ '--tier': t.color } as CSSProperties}>
+              {ex.best.name}
+            </strong>
             <span className="sb-why">{ex.why}</span>
             <span className="sb-meta">
-              {formatOdds(ex.best.probability)} · {formatNumber(ex.best.xp)} XP{ex.others > 0 && ` · +${ex.others} more badge${ex.others === 1 ? '' : 's'}`}
+              Best badge: {t.name}, {formatOdds(ex.best.probability)}
+              {ex.count > 1 && ` · ${ex.count} badges in this roll`}
             </span>
           </div>
           <button type="button" className="sb-next" onClick={() => setIndex((i) => (i + 1) % examples.length)}>
             Next roll →
           </button>
           <p className="sr-only">
-            Example: rolling {ex.roll} earns {ex.best.name}, {ex.why}.
+            Example: rolling {ex.roll} earns {ex.best.name}, {ex.why}. The roll scores {formatNumber(ex.xp)} XP, a {rr.name} roll.
           </p>
         </figure>
       </div>
@@ -207,7 +217,7 @@ function TrySection({ reducedMotion }: { reducedMotion: boolean }) {
           <h2 id="try-title">Roll one right here.</h2>
           <p>
             This is the real roll screen and the real badge engine, running in your browser. Demo rolls aren't saved
-            {STANDALONE ? ' and never reach the leaderboards.' : '. Play the full game to keep your XP and climb the leaderboards.'}
+            {STANDALONE ? ' and never reach the leaderboards.' : '. Play the full game to keep every badge you find and put your best roll on the leaderboards.'}
           </p>
         </header>
         <div className="try-grid">
@@ -222,8 +232,8 @@ function TrySection({ reducedMotion }: { reducedMotion: boolean }) {
 const STEPS = [
   ['Roll', 'Press Roll or Space. You get one number from 000000 to 999999, or the seven-digit 1000000.'],
   ['Reveal', 'Every badge hiding in the number appears under the Roll button, worst first. The best one lands last.'],
-  ['Collect', 'A badge pays XP the first time you find it: 5 for the everyday ones, about 17,000 for a one-in-a-million hit.'],
-  ['Climb', 'XP moves you up sixteen rarities, from Common to INFINITE, and onto the global leaderboards.'],
+  ['Score', "Each badge adds its XP: a few for everyday finds, hundreds of thousands for a one-in-a-million hit. The total sets the roll's rarity, from Common to INFINITE."],
+  ['Roll again', 'The next roll starts from zero. New badges join your collection, and your best roll goes on the global leaderboard.'],
 ];
 
 function HowItWorks() {
@@ -255,6 +265,9 @@ function Closer() {
     { id: 'ref.bond.only', roll: '000007', lit: [0, 6], how: 'is exactly 000007' },
   ];
   const top = Math.log10(registry.get('ref.bond.only')!.xp);
+  const bond = badgesFor(readNumber('000007')!);
+  const bondXp = rollXp(bond);
+  const bondRarity = rarityForXp(bondXp);
   return (
     <section className="band" id="closer" aria-labelledby="closer-title">
       <div className="wrap closer-grid">
@@ -263,6 +276,10 @@ function Closer() {
           <h2 id="closer-title">The closer you get, the bigger it pays.</h2>
           <p>
             Famous numbers pay out in tiers. Spot one anywhere in your roll, finish on it, or roll nothing else. An exact hit earns all three badges at once.
+          </p>
+          <p>
+            Roll <RollText text="000007" /> and everything else in the number stacks on top: {bond.length} badges, {formatNumber(bondXp)} XP, a{' '}
+            <strong style={{ color: bondRarity.color }}>{bondRarity.name}</strong> roll.
           </p>
         </header>
         <ol className="closer-list">
@@ -392,31 +409,38 @@ function Million() {
 }
 
 function Ladder() {
-  const top = Math.log10(RARITIES.at(-1)!.minXp);
+  const deepest = Math.log10(1 / RARITY_ODDS[RARITIES.at(-1)!.id]!.atLeast);
   return (
     <section className="band" id="rarities" aria-labelledby="rarities-title">
       <div className="wrap">
         <header className="section-head">
           <p className="eyebrow">Rarities</p>
           <h2 id="rarities-title">Sixteen rarities, Common to INFINITE.</h2>
-          <p>Your rarity comes from your total XP. Times are the median for a player rolling about twice a second.</p>
+          <p>
+            Every roll gets a rarity from its own XP, and the next roll starts again from zero. The odds are exact: every badge was checked against all{' '}
+            {formatNumber(ROLL_OUTCOMES)} possible rolls.
+          </p>
         </header>
         <ol className="ladder">
-          {RARITIES.map((r, i) => (
-            <li
-              key={r.id}
-              style={{ '--rarity': r.color, '--rarity-paint': rarityPaint(r), '--fill': `${r.minXp === 0 ? 2 : (Math.log10(r.minXp) / top) * 100}%` } as CSSProperties}
-            >
-              <span className="ladder-n">{i + 1}</span>
-              <span className={`ladder-name${r.accent ? ' ladder-name-paint' : ''}`}>{r.name}</span>
-              <span className="ladder-bar" aria-hidden />
-              <span className="ladder-xp">{r.minXp === 0 ? '0 XP' : `${formatNumber(r.minXp)} XP`}</span>
-              <span className="ladder-time">{MEDIAN_TIME[r.id] === 'start' ? 'where you start' : `≈ ${MEDIAN_TIME[r.id]}`}</span>
-            </li>
-          ))}
+          {RARITIES.map((r, i) => {
+            const p = RARITY_ODDS[r.id]!.atLeast;
+            return (
+              <li
+                key={r.id}
+                style={{ '--rarity': r.color, '--rarity-paint': rarityPaint(r), '--fill': `${Math.max(2, (Math.log10(1 / p) / deepest) * 100)}%` } as CSSProperties}
+              >
+                <span className="ladder-n">{i + 1}</span>
+                <span className={`ladder-name${r.accent ? ' ladder-name-paint' : ''}`}>{r.name}</span>
+                <span className="ladder-bar" aria-hidden />
+                <span className="ladder-xp">{r.minXp === 0 ? 'any roll' : `${formatNumber(r.minXp)}+ XP`}</span>
+                <span className="ladder-time">{p >= 0.999 ? 'every roll' : `1 in ${formatNumber(1 / p)}`}</span>
+              </li>
+            );
+          })}
         </ol>
         <p className="footnote">
-          Mythic and Exotic share a time because most players' first one-in-a-million badge, worth about 17,000 XP, lifts them straight past Mythic.
+          Odds are for a roll of that rarity or better. Every exact match, like 000007 or 676767, is at least Cosmic. 000000 is the only ordinary number that
+          reaches Omniversal, 1000000 is Unfathomable, and any skip is INFINITE.
         </p>
       </div>
     </section>
@@ -433,17 +457,16 @@ function Boards() {
         </header>
         <div className="boards">
           <article className="board-card">
-            <h3>Total XP</h3>
-            <p>Everyone ranked by the XP from every badge they have discovered. Rarity shown beside each name.</p>
-            {!STANDALONE && <LiveXp />}
-          </article>
-          <article className="board-card">
-            <h3>Best Number Rolled</h3>
+            <h3>Best Roll</h3>
             <p>
-              Each player's single most remarkable roll, scored by the value of every badge it triggered. Size doesn't count:{' '}
-              <RollText text="000153" /> beats <RollText text="984271" />.
+              Each player's single best roll, ranked by its XP. Size doesn't count: <RollText text="000153" /> beats <RollText text="984271" />.
             </p>
             {!STANDALONE && <LiveBest />}
+          </article>
+          <article className="board-card">
+            <h3>Most Badges</h3>
+            <p>Everyone ranked by how many different badges they have found out of {formatNumber(BADGE_COUNT)}.</p>
+            {!STANDALONE && <LiveCollection />}
           </article>
         </div>
         {STANDALONE && (
@@ -487,8 +510,8 @@ function BoardState({ data, children }: { data: unknown; children: ReactNode }) 
   return <>{children}</>;
 }
 
-function LiveXp() {
-  const data = useBoard<XpLeaderboardEntry>('/api/leaderboard/xp?limit=5');
+function LiveCollection() {
+  const data = useBoard<CollectionLeaderboardEntry>('/api/leaderboard/collection?limit=5');
   return (
     <BoardState data={data}>
       {data && data !== 'error' && (
@@ -498,19 +521,14 @@ function LiveXp() {
             <p className="board-status">Nobody has rolled yet. The top spot is open.</p>
           ) : (
             <ol className="live-list">
-              {data.entries.map((e) => {
-                const r = rarity(e.rarity);
-                return (
-                  <li key={e.playerId}>
-                    <span className="live-rank">{e.rank}</span>
-                    <span className="live-name">{e.username}</span>
-                    <span className="live-pill" style={{ '--rarity-paint': rarityPaint(r) } as CSSProperties}>
-                      {r.name}
-                    </span>
-                    <span className="live-value">{formatNumber(e.xp)}</span>
-                  </li>
-                );
-              })}
+              {data.entries.map((e) => (
+                <li key={e.playerId}>
+                  <span className="live-rank">{e.rank}</span>
+                  <span className="live-name">{e.username}</span>
+                  <span className="live-badge">{((e.badges / BADGE_COUNT) * 100).toFixed(1)}%</span>
+                  <span className="live-value">{formatNumber(e.badges)}</span>
+                </li>
+              ))}
             </ol>
           )}
         </>
@@ -536,10 +554,10 @@ function LiveBest() {
                   <span className="live-name">
                     <RollText text={e.roll} /> <small>{e.username}</small>
                   </span>
-                  <span className="live-badge" style={{ '--tier': tier(e.badges[0]?.tier ?? 'common').color } as CSSProperties}>
-                    {e.badges[0]?.name ?? ''}
+                  <span className="live-pill" style={{ '--rarity-paint': rarityPaint(rarity(e.rarity)) } as CSSProperties}>
+                    {rarity(e.rarity).name}
                   </span>
-                  <span className="live-value">{formatNumber(e.score)}</span>
+                  <span className="live-value">{formatNumber(e.xp)}</span>
                 </li>
               ))}
             </ol>

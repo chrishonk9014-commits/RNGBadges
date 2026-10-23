@@ -2,7 +2,7 @@
 
 Roll a number. Find out what's hiding in it.
 
-Every roll is one draw from **000000–999999**, or **1000000**, the only seven-digit number in the game. The game checks it against every badge in the catalog at once: funny numbers, references, math, poker hands, calendar dates and more. One roll can earn many badges. They're revealed worst to best, each new badge adds XP, and XP moves you up sixteen rarities from **Common** to **INFINITE**. Two global leaderboards track total XP and the single most remarkable roll anyone has made.
+Every roll is one draw from **000000–999999**, or **1000000**, the only seven-digit number in the game. The game checks it against every badge in the catalog at once: funny numbers, references, math, poker hands, calendar dates and more. One roll can earn many badges. They're revealed worst to best, and every badge in the roll adds its XP to that roll's total. The total decides how rare the roll is, on a sixteen-step ladder from **Common** to **INFINITE**, and the next roll starts again from zero. Badges you find are kept in your collection forever. Two global leaderboards track the best single roll anyone has made and who has found the most badges.
 
 There are 652 badges today, every one with its own name, condition and exact odds. The engine is built to take 2,500+ without slowing down or getting harder to maintain (see [Adding badges](#adding-badges)).
 
@@ -32,7 +32,7 @@ npm start          # one process serves the website, the game and the API on htt
 | `LOG_LEVEL` | `warn` | `info` logs every request |
 | `TRUST_PROXY` | off | Set to `1` behind a reverse proxy so per-IP limits see real client IPs |
 
-Other scripts: `npm test`, `npm run typecheck`, `npm run odds` (regenerate exact badge odds), `npm run balance` (pacing report).
+Other scripts: `npm test`, `npm run typecheck`, `npm run odds` (regenerate exact badge and rarity odds), `npm run balance` (exact roll-rarity report).
 
 ## Website
 
@@ -42,15 +42,15 @@ The demo and the checker run the real badge engine in the browser (`src/client/s
 
 **Repo website:** https://chrishonk9014-commits.github.io/RNGBadges/ is served by GitHub Pages from the `gh-pages` branch. The `Website` workflow (`.github/workflows/website.yml`) runs the tests, rebuilds the site and republishes `gh-pages` on every push to `main`; it can also be run by hand from the Actions tab.
 
-`npm run build:site` builds the website on its own into `dist/site`: a static copy with relative paths and no server calls, for any static host. In that copy, Play buttons go to the demo, the leaderboard section describes the boards without live data, and links point to this repository so visitors can run the full game. Badge counts, odds and XP on the site come from the catalog at build time, so they stay current; the hand-picked examples and ladder times live in `src/client/site/content.ts`, and a test fails if an example badge is renamed or removed.
+`npm run build:site` builds the website on its own into `dist/site`: a static copy with relative paths and no server calls, for any static host. In that copy, Play buttons go to the demo, the leaderboard section describes the boards without live data, and links point to this repository so visitors can run the full game. Badge counts, odds, XP and the rarity ladder's odds on the site come from the catalog at build time, so they stay current; the hand-picked examples live in `src/client/site/content.ts`, and a test fails if an example badge is renamed or removed.
 
 ## How it plays
 
 - **Roll.** Click **Roll** or press Space. Digits spin while the server rolls, then lock in left to right.
-- **Badges Collected.** Directly under the Roll button. Badges from the roll are sorted worst to best and revealed one at a time in a spotlight. The best one lands last after a short pause, and the rest stack below it. Every badge shows its name, tier, odds and XP. A **NEW** tag means first discovery. Rolling again mid-reveal finishes the current reveal at once and moves it to **Recent Rolls**, so nothing is lost. With reduced motion (OS setting or Profile → Motion), digits don't spin and badges appear all at once.
-- **XP.** Only a badge's *first* discovery pays XP. XP from all new badges on a roll stacks. Your XP, rarity bar and collection count tick up as each new badge is revealed, and rank-ups pop a toast.
+- **Badges Collected.** Directly under the Roll button. Badges from the roll are sorted worst to best and revealed one at a time in a spotlight. The best one lands last after a short pause, and the rest stack below it. Every badge shows its name, tier, odds and XP. A **NEW** tag means it just joined your collection; **Found before** means you already had it, and it still counts. Rolling again mid-reveal finishes the current reveal at once and moves it to **Recent Rolls**, so nothing is lost. With reduced motion (OS setting or Profile → Motion), digits don't spin and badges appear all at once.
+- **XP and rarity, per roll.** A roll's XP is every badge in it added together, found before or not. The rarity panel climbs the ladder as each badge is revealed and settles on the roll's rarity, with its odds ("Cosmic or better: 1 in 4,739 rolls"). The next roll resets it to zero. Beating your best roll pops a toast.
 - **Collection.** Every badge, with found/locked state, completion %, search (name, number, description), category/tier filters and sorting. Each found badge records the roll and roll number it came from. Secret badges stay `???` until found.
-- **Leaderboards.** *Total XP* ranks players by XP. *Best Number Rolled* ranks each player's best roll by **roll score**, the combined XP value of every badge that roll triggered. Numeric size doesn't count, so `000153` beats `984271`. Both boards show where you stand even outside the top 50.
+- **Leaderboards.** *Best Roll* ranks each player's single best roll by its XP and shows its rarity and standout badges. Numeric size doesn't count, so `000153` beats `984271`. *Most Badges* ranks players by how many different badges they've found. Both boards show where you stand even outside the top 50.
 - **Profile.** Rename yourself and see your **save code**. Your progress lives on the server, and the code is the key to it on any device.
 
 ## The 1000000 skip mechanic
@@ -95,9 +95,11 @@ Rule kinds: `contains`, `startsWith`, `endsWith`, `exact`, `mask` (`_` = any dig
 
 | Badge | Condition | Odds | XP |
 |---|---|---:|---:|
-| Secret Agent | contains `007` (e.g. `210074`) | 1 in 250 | 5 |
-| Licensed to Kill | ends in `007` (e.g. `913007`) | 1 in 1,000 | 10 |
-| Bond. James Bond. | is exactly `000007` | 1 in 1,000,001 | 17,000 |
+| Secret Agent | contains `007` (e.g. `210074`) | 1 in 250 | 350 |
+| Licensed to Kill | ends in `007` (e.g. `913007`) | 1 in 1,000 | 900 |
+| Bond. James Bond. | is exactly `000007` | 1 in 1,000,001 | 350,000 |
+
+The tiers stack: `000007` earns all three and 13 more badges, 610,330 XP in one roll (Universal).
 
 Two- to four-digit references get all three tiers. Five-digit ones skip "ends in" because it would be barely rarer than "contains". Six-digit ones are a single exact badge.
 
@@ -106,15 +108,15 @@ Two- to four-digit references get all three tiers. Five-digit ones skip "ends in
 ### Adding badges
 
 1. Add a definition in `src/shared/badges/catalog/` (a reference is one row in `culture.ts`, `scienceHistory.ts` or `words.ts`).
-2. `npm run odds` recomputes exact odds for every badge by enumerating all 1,000,001 outcomes (about 5 s) and fails if a badge can never be earned.
+2. `npm run odds` recomputes exact odds for every badge by enumerating all 1,000,001 outcomes (about 5 s), fails if a badge can never be earned, and regenerates the odds of each roll rarity.
 3. `npm run balance` shows how the change moves the rarity ladder.
-4. `npm test`, which also checks that `odds.json` is current.
+4. `npm test`, which also checks that `odds.json` and `rarityOdds.json` are current.
 
-XP comes from odds, so a new badge prices itself. If badge values change, the server rebuilds every player's XP and best-roll score from their stored discoveries on the next start, which keeps the leaderboards consistent.
+XP comes from odds, so a new badge prices itself. If badge values change, the server rescores every player's best roll and recounts their collection on the next start, which keeps the leaderboards consistent.
 
 ## Balance
 
-Full write-up and numbers: **[BALANCE.md](BALANCE.md)**. Short version: XP follows a tuned rarity curve, from 5 XP for anything commoner than 1 in 200 up to ~17,000 XP for a one-in-a-million badge. Early ranks come from cheap badges in minutes. The long game is carried by the 212 one-in-a-million badges. At two rolls a second, a median player reaches Legendary in about 16 minutes, Transcendent in about 4 hours, and INFINITE after roughly 290 hours of rolling.
+Full write-up and exact numbers: **[BALANCE.md](BALANCE.md)**. Short version: badge XP follows a tuned rarity curve, from 10 XP for the commonest badges to 350,000 for an exact six-digit hit and millions for 1000000 and its skips. Half of all rolls are Common, 1 in 78 is Legendary or better, 1 in 4,739 is Cosmic or better (any exact-number hit), and the top rungs are pinned: `000000` is Omniversal, `1000000` Unfathomable, any skip INFINITE (1 in 10 million).
 
 ## Architecture
 
@@ -124,20 +126,20 @@ src/shared/            engine shared by server, client and scripts
   badges/types.ts      badge definition + rule types
   badges/catalog/      the badge data (one file per family)
   badges/detector.ts   indexed detection
-  badges/odds.ts       exact odds by enumeration → odds.json
+  badges/odds.ts       exact odds by enumeration → odds.json, rarityOdds.json
   badges/registry.ts   definitions + odds → XP, tier, quality order
   xp.ts                XP curve and badge tiers
   progression.ts       rarity thresholds (the only place they live)
-  scoring.ts           Best Number Rolled score
+  scoring.ts           roll XP and rarity
 src/server/            Fastify API + SQLite (node:sqlite)
   game.ts              accounts, rolling, awards, leaderboards, rebalancing
   app.ts               routes, auth, rate limits, static client
 src/client/            React UI (Vite): the game (play/, App.tsx) and the website (site/)
-scripts/               odds generator, balance simulator, build helpers
+scripts/               odds generator, balance report, build helpers
 tests/                 vitest: roll/skip, badges/odds, progression/reveal, API
 ```
 
-**Rolls happen on the server.** The client asks for a roll; the server draws it with `crypto.randomInt`, detects badges, records first discoveries in a transaction, and returns the result. Leaderboards therefore only contain numbers the server actually rolled.
+**Rolls happen on the server.** The client asks for a roll; the server draws it with `crypto.randomInt`, detects badges, scores the roll, records first discoveries and the player's best roll in a transaction, and returns the result. Leaderboards therefore only contain numbers the server actually rolled.
 
 **Accounts** are anonymous: the first visit creates a player with a generated name and a random 256-bit save code (the server stores only its SHA-256 hash). The browser keeps the code in `localStorage`. Pasting it into Profile on another device continues the same save.
 

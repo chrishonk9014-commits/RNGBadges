@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RollResponse } from '../../shared/api';
 import { revealOffsets } from '../reveal';
-import { formatNumber } from '../format';
+import { formatNumber, rarity } from '../format';
 import { BadgeCard } from './BadgeCard';
 
 interface Props {
@@ -53,7 +53,8 @@ export function BadgesCollected({ roll, mode, reducedMotion, onComplete, onProgr
   }, [roll, mode, offsets, count]);
 
   const done = shown >= count;
-  const revealedXp = badges.slice(0, shown).reduce((sum, b) => sum + (b.isNew ? b.xp : 0), 0);
+  // Every badge counts toward the roll's XP, found before or not.
+  const revealedXp = badges.slice(0, shown).reduce((sum, b) => sum + b.xp, 0);
   const newCount = badges.slice(0, shown).filter((b) => b.isNew).length;
   const spotlight = shown > 0 ? badges[shown - 1] : undefined;
   const earlier = badges.slice(0, Math.max(0, shown - 1)).reverse();
@@ -67,7 +68,7 @@ export function BadgesCollected({ roll, mode, reducedMotion, onComplete, onProgr
             <span>
               {shown}/{count} badge{count === 1 ? '' : 's'}
             </span>
-            <span className={`collected-xp${revealedXp > 0 ? ' has-xp' : ''}`}>+{formatNumber(revealedXp)} XP</span>
+            <span className={`collected-xp${revealedXp > 0 ? ' has-xp' : ''}`}>{formatNumber(revealedXp)} XP</span>
             {newCount > 0 && <span className="collected-new">{newCount} new</span>}
           </p>
         )}
@@ -91,9 +92,9 @@ export function BadgesCollected({ roll, mode, reducedMotion, onComplete, onProgr
         {roll && done && mode !== 'wait'
           ? count === 0
             ? `Rolled ${roll.roll.text}. No badges.`
-            : `Rolled ${roll.roll.text}. ${count} badge${count === 1 ? '' : 's'}, best: ${badges[count - 1]!.name}. ${
-                revealedXp > 0 ? `Plus ${formatNumber(revealedXp)} XP.` : 'No new XP.'
-              }`
+            : `Rolled ${roll.roll.text}. ${count} badge${count === 1 ? '' : 's'}, best: ${badges[count - 1]!.name}. ${formatNumber(
+                revealedXp,
+              )} XP, a ${rarity(roll.rarity).name} roll.`
           : ''}
       </p>
     </section>

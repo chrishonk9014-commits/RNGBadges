@@ -2,19 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { BadgesCollected } from './components/BadgesCollected';
 import { IconGrid, IconTrophy, IconUser } from './components/Icons';
 import { LeaderboardSheet } from './components/LeaderboardSheet';
-import { RarityPanel, RecentRolls, StatsPanel } from './components/Panels';
+import { RecentRolls, RollRarityPanel, StatsPanel, type RollPanelStatus } from './components/Panels';
 import { ProfileSheet } from './components/ProfileSheet';
 import { RollStage } from './components/RollStage';
 import { CollectionSheet } from './components/CollectionSheet';
-import { rarityIndexForXp, rarityForXp, RARITIES } from '../shared/progression';
-import { BADGE_TIERS, rarity, rarityPaint, tier, useSystemReducedMotion } from './format';
+import { rarityForXp, rarityIndexForXp } from '../shared/progression';
+import { formatNumber, rarity, rarityPaint, useSystemReducedMotion } from './format';
 import { loadMotion, saveMotion, type MotionPreference } from './storage';
 import { useGame } from './useGame';
 
-interface RankUp {
-  key: number;
-  from: string;
-  to: string;
+interface BestToast {
+  key: string;
+  roll: string;
+  xp: number;
+  rarity: string;
 }
 
 type View = 'play' | 'collection' | 'leaderboards' | 'profile';
@@ -36,42 +37,46 @@ export function App() {
   const shownRoll = currentLanded ? current : rolling ? current : (history[0] ?? null);
   const columnMode = currentLanded && !rolling ? 'animate' : shownRoll ? 'instant' : 'wait';
 
-  // XP, rarity and collection count tick up as each new badge is revealed rather
-  // than the moment the server answers, so the panels never spoil the reveal.
-  const pending = useMemo(() => {
-    if (!current || revealedId === current.id) return { xp: 0, badges: 0 };
+  // Each roll is scored on its own. The panel resets while the next number spins,
+  // then its XP climbs as each badge is revealed and settles on the roll's rarity.
+  const panel = useMemo((): { xp: number; status: RollPanelStatus } => {
+    if (rolling || (current && !currentLanded)) return { xp: 0, status: 'rolling' };
+    if (!current) return { xp: 0, status: 'idle' };
+    if (revealedId === current.id) return { xp: current.xp, status: 'final' };
     const shown = progress?.id === current.id ? progress.shown : 0;
-    const hidden = current.badges.slice(shown).filter((b) => b.isNew);
-    return { xp: hidden.reduce((sum, b) => sum + b.xp, 0), badges: hidden.length };
+    return { xp: current.badges.slice(0, shown).reduce((sum, b) => sum + b.xp, 0), status: 'counting' };
+  }, [rolling, current, currentLanded, revealedId, progress]);
+
+  // The collection count and best roll also wait for the reveal, so the side panel never spoils it.
+  const pendingBadges = useMemo(() => {
+    if (!current || revealedId === current.id) return 0;
+    const shown = progress?.id === current.id ? progress.shown : 0;
+    return current.badges.slice(shown).filter((b) => b.isNew).length;
   }, [current, revealedId, progress]);
-  const player = useMemo(() => {
-    if (!state.player) return null;
-    const xp = state.player.xp - pending.xp;
-    return { ...state.player, xp, uniqueBadges: state.player.uniqueBadges - pending.badges, rarity: rarityForXp(xp).id };
-  }, [state.player, pending]);
+  const player = useMemo(
+    () => (state.player ? { ...state.player, uniqueBadges: state.player.uniqueBadges - pendingBadges } : null),
+    [state.player, pendingBadges],
+  );
   const best = current && current.bestImproved && revealedId !== current.id ? state.bestBefore : state.best;
 
-  // One toast at a time; climbing several ranks in one reveal widens it ("from Rare" → "Exotic").
-  const [toast, setToast] = useState<RankUp | null>(null);
-  const lastRank = useRef<{ playerId: number; index: number } | null>(null);
+  // Beat your best roll and a toast says so, once the reveal has finished.
+  const [toast, setToast] = useState<BestToast | null>(null);
+  const toastedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!player) return;
-    const index = rarityIndexForXp(player.xp);
-    const last = lastRank.current;
-    if (last && last.playerId === player.id && index > last.index) {
-      const from = RARITIES[last.index]!.id;
-      setToast((t) => ({ key: Date.now(), from: t?.from ?? from, to: RARITIES[index]!.id }));
+    if (!current || revealedId !== current.id || toastedFor.current === current.id) return;
+    toastedFor.current = current.id;
+    if (current.bestImproved && current.rollNumber > 1) {
+      setToast({ key: current.id, roll: current.roll.text, xp: current.xp, rarity: current.rarity });
     }
-    lastRank.current = { playerId: player.id, index };
-  }, [player]);
+  }, [current, revealedId]);
   const dismissToast = useCallback(() => setToast(null), []);
 
+  // Legendary rolls and up light the stage in the roll's rarity colour.
   const glow = useMemo(() => {
-    if (!current || revealedId !== current.id || current.badges.length === 0) return null;
-    const best = tier(current.badges.at(-1)!.tier);
-    const index = BADGE_TIERS.findIndex((t) => t.id === best.id);
-    if (index < 3) return null;
-    return { color: best.color, strength: Math.min(1, (index - 2) / 6) };
+    if (!current || revealedId !== current.id) return null;
+    const index = rarityIndexForXp(current.xp);
+    if (index < 5) return null;
+    return { color: rarityForXp(current.xp).color, strength: Math.min(1, (index - 4) / 8) };
   }, [current, revealedId]);
 
   const onRoll = useCallback(() => {
@@ -119,7 +124,7 @@ export function App() {
     );
   }
 
-  const r = rarity(player.rarity);
+  const r = rarityForXp(panel.xp);
   return (
     <div
       className="app"
@@ -150,7 +155,7 @@ export function App() {
 
       <main className="layout">
         <div className="play">
-          <RarityPanel player={player} />
+          <RollRarityPanel xp={panel.xp} status={panel.status} />
           <RollStage
             roll={current?.roll ?? null}
             rollId={current?.id ?? null}
@@ -199,12 +204,12 @@ export function App() {
         </p>
       </footer>
 
-      <RankUpToast toast={toast} onDismiss={dismissToast} />
+      <BestRollToast toast={toast} onDismiss={dismissToast} />
 
       {view === 'collection' && (
         <CollectionSheet catalog={catalog} player={player} discoveries={state.discoveries} revealed={state.revealed} onClose={() => setView('play')} />
       )}
-      {view === 'leaderboards' && <LeaderboardSheet token={state.token} onClose={() => setView('play')} />}
+      {view === 'leaderboards' && <LeaderboardSheet token={state.token} totalBadges={catalog.badges.length} onClose={() => setView('play')} />}
       {view === 'profile' && state.token && (
         <ProfileSheet
           player={player}
@@ -220,20 +225,21 @@ export function App() {
   );
 }
 
-function RankUpToast({ toast, onDismiss }: { toast: RankUp | null; onDismiss: () => void }) {
+function BestRollToast({ toast, onDismiss }: { toast: BestToast | null; onDismiss: () => void }) {
   useEffect(() => {
     if (!toast) return;
-    const t = window.setTimeout(onDismiss, 3600);
+    const t = window.setTimeout(onDismiss, 4200);
     return () => window.clearTimeout(t);
   }, [toast, onDismiss]);
   if (!toast) return null;
-  const to = rarity(toast.to);
-  const from = rarity(toast.from);
+  const r = rarity(toast.rarity);
   return (
-    <div key={toast.key} className="toast" role="status" style={{ '--rarity-paint': rarityPaint(to), '--rarity': to.color } as CSSProperties}>
-      <p className="toast-kicker">Rank up</p>
-      <p className="toast-title">{to.name}</p>
-      <p className="toast-sub">from {from.name}</p>
+    <div key={toast.key} className="toast" role="status" style={{ '--rarity-paint': rarityPaint(r), '--rarity': r.color } as CSSProperties}>
+      <p className="toast-kicker">New best roll</p>
+      <p className="toast-title">{r.name}</p>
+      <p className="toast-sub">
+        {toast.roll} · {formatNumber(toast.xp)} XP
+      </p>
       <button type="button" className="icon-button toast-close" onClick={onDismiss} aria-label="Dismiss">
         ×
       </button>

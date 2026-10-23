@@ -89,7 +89,8 @@ function reducer(state: GameState, action: Action): GameState {
       const best: BestRoll | null = res.bestImproved
         ? {
             roll: res.roll.text,
-            score: res.score,
+            xp: res.xp,
+            rarity: res.rarity,
             at,
             badges: [...res.badges].reverse().slice(0, 3).map(({ id, name, tier, xp }) => ({ id, name, tier, xp })),
           }

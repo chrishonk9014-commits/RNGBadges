@@ -117,7 +117,7 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     return game.roll(id, typeof body.tzOffset === 'number' ? body.tzOffset : 0);
   });
 
-  app.get('/api/leaderboard/xp', async (req) => game.xpLeaderboard(limitParam(req), optionalPlayer(req)));
+  app.get('/api/leaderboard/collection', async (req) => game.collectionLeaderboard(limitParam(req), optionalPlayer(req)));
   app.get('/api/leaderboard/best', async (req) => game.bestLeaderboard(limitParam(req), optionalPlayer(req)));
   app.get('/api/stats/badges', async () => game.badgeStats());
 

@@ -1,31 +1,24 @@
 import type { CatalogBadge } from './badges/registry';
+import { rarityForXp, type Rarity } from './progression';
+
+/** How many badges to show next to a leaderboard entry. */
+export const STANDOUT_COUNT = 3;
 
 /**
- * Best Number Rolled score. A roll is worth the XP value of every badge it
- * triggers, whether or not the player already owned them, so the leaderboard
- * ranks how remarkable the number is — never how big it is. `topBadgeWeight`
- * and `otherBadgeWeight` let the standout badge count for more or less than
- * the supporting cast.
+ * A roll's XP: the XP of every badge the number earned, added together.
+ * Found it before or not, every badge counts, every roll.
  */
-export const SCORE_CONFIG = {
-  topBadgeWeight: 1,
-  otherBadgeWeight: 1,
-  /** How many badges to show next to a leaderboard entry. */
-  standoutCount: 3,
-};
-
-export function rollScore(badges: readonly Pick<CatalogBadge, 'xp'>[], config = SCORE_CONFIG): number {
-  if (badges.length === 0) return 0;
-  let top = 0;
+export function rollXp(badges: readonly Pick<CatalogBadge, 'xp'>[]): number {
   let total = 0;
-  for (const b of badges) {
-    total += b.xp;
-    top = Math.max(top, b.xp);
-  }
-  return Math.round(top * config.topBadgeWeight + (total - top) * config.otherBadgeWeight);
+  for (const b of badges) total += b.xp;
+  return total;
+}
+
+export function rollRarity(badges: readonly Pick<CatalogBadge, 'xp'>[]): Rarity {
+  return rarityForXp(rollXp(badges));
 }
 
 /** The badges worth showing beside a roll, best first. */
-export function standoutBadges<T extends Pick<CatalogBadge, 'xp' | 'probability'>>(badges: readonly T[], count = SCORE_CONFIG.standoutCount): T[] {
+export function standoutBadges<T extends Pick<CatalogBadge, 'xp' | 'probability'>>(badges: readonly T[], count = STANDOUT_COUNT): T[] {
   return [...badges].sort((a, b) => b.xp - a.xp || a.probability - b.probability).slice(0, count);
 }
