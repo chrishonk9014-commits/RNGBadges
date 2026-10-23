@@ -12,6 +12,7 @@
     "dev:server": "tsx watch --clear-screen=false src/server/main.ts",
     "dev:client": "vite",
     "build": "vite build && node scripts/build-server.mjs",
+    "build:site": "node scripts/build-site.mjs",
     "start": "node dist/server/main.js",
     "odds": "tsx scripts/compute-odds.ts",
     "balance": "tsx scripts/balance.ts",
@@ -21,6 +22,8 @@
   },
   "dependencies": {
     "@fastify/static": "^10.1.7",
+    "@fontsource-variable/figtree": "^5.3.0",
+    "@fontsource-variable/martian-mono": "^5.3.0",
     "fastify": "^5.12.7",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

@@ -15,11 +15,13 @@ npm install
 npm run dev        # API on :8787 + Vite on http://localhost:5173
 ```
 
+The website is at `/` and the game at `/play/`.
+
 Production:
 
 ```bash
 npm run build      # client → dist/client, server → dist/server
-npm start          # one process serves the game and the API on http://localhost:8787
+npm start          # one process serves the website, the game and the API on http://localhost:8787
 ```
 
 | Env var | Default | |
@@ -31,6 +33,14 @@ npm start          # one process serves the game and the API on http://localhost
 | `TRUST_PROXY` | off | Set to `1` behind a reverse proxy so per-IP limits see real client IPs |
 
 Other scripts: `npm test`, `npm run typecheck`, `npm run odds` (regenerate exact badge odds), `npm run balance` (pacing report).
+
+## Website
+
+`/` is the game's website: what RNG Badges is, a playable demo, a number checker, the badge families, the closer-pays-more reference tiers, the 1000000 skip odds, the rarity ladder, both leaderboards and an FAQ. It links to the game at `/play/`, and the game's logo links back.
+
+The demo and the checker run the real badge engine in the browser (`src/client/site/engine.ts`), using the game's own roll and reveal components. Demo rolls are never saved and never reach the leaderboards. When the site is served by the game server, the leaderboard section shows the live top five on each board.
+
+`npm run build:site` builds the website on its own into `dist/site`: a static copy with relative paths and no server calls, for any static host. In that copy, Play buttons go to the demo, and the leaderboard section describes the boards without live data. Badge counts, odds and XP on the site come from the catalog at build time, so they stay current; the hand-picked examples and ladder times live in `src/client/site/content.ts`, and a test fails if an example badge is renamed or removed.
 
 ## How it plays
 
@@ -120,7 +130,7 @@ src/shared/            engine shared by server, client and scripts
 src/server/            Fastify API + SQLite (node:sqlite)
   game.ts              accounts, rolling, awards, leaderboards, rebalancing
   app.ts               routes, auth, rate limits, static client
-src/client/            React UI (Vite)
+src/client/            React UI (Vite): the game (play/, App.tsx) and the website (site/)
 scripts/               odds generator, balance simulator, build helpers
 tests/                 vitest: roll/skip, badges/odds, progression/reveal, API
 ```

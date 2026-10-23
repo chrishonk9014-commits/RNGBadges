@@ -9,6 +9,7 @@ export const formatNumber = (n: number): string => nf.format(Math.round(n));
 /** "1 in 1,000,001", compact for huge odds. */
 export function formatOdds(probability: number): string {
   const odds = 1 / probability;
+  if (odds >= 1e12) return `1 in ${(odds / 1e12).toLocaleString('en-US', { maximumFractionDigits: 1 })} trillion`;
   if (odds >= 1e9) return `1 in ${(odds / 1e9).toLocaleString('en-US', { maximumFractionDigits: 1 })} billion`;
   if (odds >= 1e7) return `1 in ${(odds / 1e6).toLocaleString('en-US', { maximumFractionDigits: 0 })} million`;
   return `1 in ${formatNumber(odds)}`;

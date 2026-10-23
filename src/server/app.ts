@@ -126,7 +126,8 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
   });
 
   if (options.clientDir && existsSync(options.clientDir)) {
-    await app.register(fastifyStatic, { root: options.clientDir, wildcard: false });
+    // "/" is the website, "/play/" is the game; "/play" redirects to "/play/".
+    await app.register(fastifyStatic, { root: options.clientDir, redirect: true });
     app.setNotFoundHandler((req, reply) => {
       if (req.method === 'GET' && !req.url.startsWith('/api/')) return reply.sendFile('index.html');
       return reply.status(404).send({ error: 'not_found', message: 'Not found.' } satisfies ApiError);

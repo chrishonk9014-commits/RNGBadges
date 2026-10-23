@@ -28,6 +28,11 @@ function powersUpTo(k: number): number[] {
   return out;
 }
 
+function lazySetTest(build: () => readonly number[]): (f: RollFacts) => boolean {
+  let set: Set<number> | null = null;
+  return (f) => (set ??= new Set(build())).has(f.value);
+}
+
 function triangulars(): number[] {
   const out: number[] = [];
   for (let k = 0; (k * (k + 1)) / 2 <= VALUE_LIMIT; k++) out.push((k * (k + 1)) / 2);
@@ -94,9 +99,11 @@ export function numberTheoryBadges(): BadgeDef[] {
       kind: 'values',
       values: FACTORIALS,
     }),
+    // Both divisor-based sets need a sieve over a million numbers, so they are
+    // built on the first roll that asks rather than when the catalog loads.
     nt('perfect-number', 'Perfect Number', 'The roll equals the sum of its own divisors (6, 28, 496, 8128).', 'Only four exist below a million.', {
-      kind: 'values',
-      values: perfectNumbers(),
+      kind: 'test',
+      test: lazySetTest(perfectNumbers),
     }),
     nt('catalan', 'Catalan Number', 'The roll is a Catalan number (1, 2, 5, 14, 42, 132, …).', 'Counting brackets, trees and handshakes.', {
       kind: 'values',
@@ -107,7 +114,7 @@ export function numberTheoryBadges(): BadgeDef[] {
       'Highly Composite',
       'The roll has more divisors than every smaller number (… 720, 5040, 720720).',
       'The opposite of a prime.',
-      { kind: 'values', values: highlyComposite() },
+      { kind: 'test', test: lazySetTest(highlyComposite) },
     ),
     nt('taxicab', 'Cab Fare', 'The roll is a sum of two positive cubes in two different ways.', 'Ramanujan would have noticed.', {
       kind: 'values',

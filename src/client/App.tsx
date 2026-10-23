@@ -127,7 +127,11 @@ export function App() {
       style={{ '--rarity': r.color, '--rarity-paint': rarityPaint(r) } as CSSProperties}
     >
       <header className="topbar">
-        <h1 className="logo">RNG BADGES</h1>
+        <h1 className="logo">
+          <a href="/" className="logo-link" title="RNG Badges home">
+            RNG BADGES
+          </a>
+        </h1>
         <nav className="nav" aria-label="Main">
           <button type="button" className="nav-button" onClick={() => setView('collection')}>
             <IconGrid />
